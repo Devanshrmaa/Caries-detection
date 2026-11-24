@@ -1,6 +1,6 @@
 // Offline support: the page itself is fetched network-first so updates show up straight away;
 // everything else (samples, icons, fonts) is served from the cache and refreshed in the background.
-const CACHE = 'caries-depth-v1';
+const CACHE = 'caries-depth-v2';
 const SAMPLES = ['dentin-middle', 'sound', 'enamel', 'dentin-deep', 'pulp', 'tester-1', 'tester-2', 'tester-3',
   'xray-enamel', 'xray-dentin', 'xray-pulp', 'xray-sound'];
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',

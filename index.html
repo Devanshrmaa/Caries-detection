@@ -118,6 +118,12 @@ button,input,label.btn{font:inherit}
 .xhelp{position:absolute;left:0;right:0;bottom:56px;margin:0;text-align:center;color:#dbe4ec;font-size:13px;pointer-events:none}
 .xnote{display:none;margin-top:12px;font-size:14px;color:var(--muted);border-left:3px solid var(--line);padding-left:10px}
 .xraymode .xnote{display:block}
+.findings{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
+.findings:empty{display:none}
+.findings li{border:1px solid var(--line);border-left:4px solid var(--enamel);border-radius:10px;padding:9px 12px;font-size:14.5px}
+.findings li.caution{border-left-color:var(--red)}
+.findings li b{display:block;font-weight:650;font-size:15px}
+.findings li span{color:var(--muted)}
 .xraymode .stack{background:#000}
 .xraymode #c-tint{opacity:.55}
 .stack.moving{cursor:grab}
@@ -127,6 +133,7 @@ button,input,label.btn{font:inherit}
 .step2{border:1px solid var(--line);border-radius:14px;padding:16px}
 .step2 p{color:var(--muted);font-size:14.5px;margin-top:6px}
 .xlimits{margin-top:18px}
+.step2 .app{margin-top:10px;color:var(--ink);font-size:14px;padding-left:10px;border-left:3px solid var(--enamel)}
 @media (max-width:900px){.xexplain{grid-template-columns:minmax(0,1fr)}}
 @media (min-width:761px){.viewer{align-self:start;position:sticky;top:16px;min-height:min(calc(100vh - 32px),780px)}}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
@@ -228,8 +235,9 @@ footer p+p{margin-top:6px}
       <div class="axis"><span style="left:0">Surface</span><span style="left:38.5%"><b class="long">Enamel–dentin junction</b><b class="short">DEJ</b></span><span style="left:76.9%">Pulp</span></div>
       <ul class="tissues" id="tissues"></ul>
       <p class="why" id="why"></p>
+      <ul class="findings" id="findings" aria-label="Other findings"></ul>
       <p class="warn" id="warn"></p>
-      <p class="xnote" id="xnote">X-ray reading is an estimate made on the reference molar. Check that the outline fits the tooth and that the red area is the decay; it is not a diagnosis.</p>
+      <p class="xnote" id="xnote">X-ray reading is an estimate made on the reference molar. Decay usually reaches further than a radiograph shows, and decay on the cheek or tongue side of a tooth rarely shows at all. Check that the outline fits and that the red area is the decay; it is not a diagnosis.</p>
       <div class="mg"><h3>Usual management</h3><p id="mgmt"></p></div>
       <p class="meta" id="meta"></p>
     </section>
@@ -339,7 +347,23 @@ footer p+p{margin-top:6px}
       <div class="step2"><h3>Looks for dark areas</h3><p>Decay lets more X-rays through, so it shows darker than sound enamel and dentin. The app compares each point of the crown with the sound tissue around it and keeps dark patches that open onto the tooth surface.</p></div>
       <div class="step2"><h3>Reads the depth</h3><p>The marked area is read with the same depth index and the same two thresholds fitted to your diagram dataset: past 29% of the way from the junction to the pulp is dentin, touching the pulp outline is pulp.</p></div>
     </div>
-    <p class="sub xlimits">Limits: the reference is one molar, so a tooth with a different shape only fits roughly, and the depth reading is only as good as that fit. Overlapping teeth, fillings, burn-out at the neck of the tooth and the pulp horns can look like decay. The X-ray reading has not been checked against labelled radiographs.</p>
+    <p class="sub xlimits">Limits: the reference is one molar, so a tooth with a different shape only fits roughly, and the depth reading is only as good as that fit. Overlapping teeth, tooth-coloured fillings and the pulp horns can still look like decay; burn-out and metal fillings are recognised, but not perfectly. The X-ray reading has not been checked against labelled radiographs.</p>
+  </div>
+</section>
+
+<section class="band sect" id="atlas">
+  <div class="wrap">
+    <h2>Reading decay on a radiograph</h2>
+    <p class="sub">What a dental radiology atlas teaches about finding decay on X-rays, and how X-ray mode puts each point to use.</p>
+    <div class="xexplain atlas">
+      <div class="step2"><h3>Use the right film</h3><p>Bite-wings are the key radiograph for early decay between back teeth, because the beam passes straight through the contact areas. Periapical films show the root tips and the bone around them, but decay between teeth is easy to miss on them.</p><p class="app">X-ray mode names the surface a lesion is on and which film shows it best.</p></div>
+      <div class="step2"><h3>What can show at all</h3><p>Decay shows only where the beam grazes the surface and no sound tooth lies over it. Decay between teeth shows early; fissure decay on the biting surface only once it is well into dentin; decay on the cheek or tongue side hardly ever. Lesions also reach further than they look.</p><p class="app">Occlusal readings say the lesion is probably bigger than it looks.</p></div>
+      <div class="step2"><h3>Cervical burn-out</h3><p>The neck of the tooth, between the enamel and the bone, is covered by neither, so X-rays pass easily and it shows dark on most radiographs. It can pass for root decay, and next to a metal filling it can fake an overhang. Burn-out darkens both sides of the neck alike.</p><p class="app">Dark bands at both sides of the neck are reported as burn-out and left out of Find dark areas.</p></div>
+      <div class="step2"><h3>Fillings and secondary decay</h3><p>Metal fillings, crowns and root fillings stop X-rays and show bright white. A dark area along a filling's edge can be recurrent decay, but some liners and tooth-coloured fillings let X-rays through and look dark as well.</p><p class="app">Very bright areas are kept out of the "sound tooth" brightness, and dark areas against them are flagged as possible secondary decay.</p></div>
+      <div class="step2"><h3>Beyond the crown</h3><p>Decay into the pulp can lead to apical periodontitis. Early on the radiograph shows nothing; acute inflammation gives a diffuse dark area with a widened ligament space; a long-standing lesion is sharply bordered with a bright rim. An intact lamina dura is a sign of health, and no radiograph shows whether the pulp is alive.</p><p class="app">When the root tips are in view, a dark halo around one is flagged as possible apical periodontitis.</p></div>
+      <div class="step2"><h3>Image quality</h3><p>The best radiograph has the most contrast. A grey or light film, from under-exposure or under-development, makes lesions look smaller and hides early ones; a dark, fogged film exaggerates burn-out. A bent film or a wrongly angled beam stretches or shortens the tooth.</p><p class="app">Low-contrast, light or dark images, and a tooth that had to be stretched a lot to fit, are flagged.</p></div>
+    </div>
+    <p class="sub xlimits">Summarised in our own words from F. A. Pasler, <cite>Color Atlas of Dental Medicine: Radiology</cite> (Thieme): the chapters on bite-wing radiographs, radiographic anatomy, errors in technique and processing, regressive changes, apical periodontitis and filling materials.</p>
   </div>
 </section>
 
@@ -1332,28 +1356,54 @@ footer p+p{margin-top:6px}
   function xrayRefs() {
     if (T.xr) return T.xr;
     const { W, H, zones, sil } = T, N = W * H;
-    let cervY = 0;
-    for (let i = 0; i < N; i++) if (zones[i] === Z.EN) cervY = Math.max(cervY, (i / W) | 0);
+    let cervY = 0, ex0 = W, ex1 = 0;
+    for (let i = 0; i < N; i++) if (zones[i] === Z.EN) { const x = i % W; cervY = Math.max(cervY, (i / W) | 0); ex0 = Math.min(ex0, x); ex1 = Math.max(ex1, x); }
     const box = [W, H, -1, -1];
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (sil[y * W + x]) {
       box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], y);
     }
-    T.xr = { cervY, box, near: dilate(sil, W, H, 41), core: erode(sil, W, H, 21) };
+    const midX = (ex0 + ex1) / 2, out = new Uint8Array(N);
+    for (let i = 0; i < N; i++) out[i] = sil[i] ? 0 : 1;
+    const dIn = distTo(out, W, H); // depth below the outer surface, for points inside the tooth
+    // the neck of the tooth on each side, where cervical burn-out shows
+    const neck = new Uint8Array(N);
+    for (let y = cervY - 50; y <= cervY + 25; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      if (sil[i] && dIn[i] <= 24) neck[i] = x < midX ? 1 : 2;
+    }
+    // root tips: the lowest point of the outline on each side
+    const apex = [[0, 0], [0, 0]];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (sil[y * W + x]) { const a = apex[x < midX ? 0 : 1]; if (y >= a[1]) { a[0] = x; a[1] = y; } }
+    T.xr = { cervY, box, midX, dIn, neck, apex, near: dilate(sil, W, H, 41), core: erode(sil, W, H, 21) };
     return T.xr;
   }
-  // Dark (radiolucent) areas in the crown that open onto the tooth surface.
-  // g: grey image already in the template frame (W*H); valid: 1 where the image covers the frame;
-  // k: how much darker than sound tissue counts, as a share of the crown's contrast range.
-  function findDark(g, valid, k) {
-    const { W, H, eff, S, outIdx } = T, N = W * H, { cervY, core } = xrayRefs();
+  // Grey levels of the crown in the template frame. Very bright patches (metal fillings, crowns,
+  // root fillings) are radiopaque, so they are found first and kept out of the "sound tissue" levels.
+  function frameStats(g, valid) {
+    const { W, eff, outIdx } = T, N = g.length, { cervY, core } = xrayRefs();
+    const en0 = [];
+    for (let i = 0; i < N; i++) if (valid[i] && (i / W | 0) <= cervY && eff[i] === Z.EN) en0.push(g[i]);
+    if (en0.length < 300) return null;
+    const e25 = percentileSorted(Float64Array.from(en0).sort(), 25);
+    const restoT = Math.max(e25 + 40, Math.min(250, e25 + 0.6 * (255 - e25)));
+    let resto = new Uint8Array(N);
+    for (let i = 0; i < N; i++) resto[i] = valid[i] && T.sil[i] && g[i] >= restoT ? 1 : 0;
+    resto = opening(resto, T.W, T.H, 5);
+    const cc = components(resto, T.W, T.H, true);
+    let restoArea = 0, rootFill = 0;
+    for (let i = 0; i < N; i++) {
+      const l = cc.lab[i];
+      if (!l || cc.area[l] < 150) { resto[i] = 0; continue; }
+      if ((i / W | 0) > cervY + 30 && eff[i] === Z.PU) rootFill++; else restoArea++;
+    }
     const en = [], de = [], inner = [], outer = [];
     for (let i = 0; i < N; i++) {
-      if (!valid[i] || (i / W | 0) > cervY) continue;
+      if (!valid[i] || resto[i] || (i / W | 0) > cervY) continue;
       if (eff[i] === Z.EN) en.push(g[i]); else if (eff[i] === Z.DE) de.push(g[i]);
       if (core[i]) inner.push(g[i]);
     }
     for (let j = 0; j < outIdx.length; j++) { const i = outIdx[j]; if (valid[i] && (i / W | 0) <= cervY) outer.push(g[i]); }
-    if (en.length < 300 || de.length < 300 || inner.length < 300) return null;
+    if (en.length < 200 || de.length < 300 || inner.length < 300) return null;
     const sorted = (a) => Float64Array.from(a).sort();
     const E = sorted(en), D = sorted(de), all = sorted(en.concat(de)), O = outer.length > 50 ? sorted(outer) : null;
     const mE = percentileSorted(E, 70), mD = percentileSorted(D, 70), mIn = median(inner);
@@ -1362,37 +1412,126 @@ footer p+p{margin-top:6px}
     // it may be darker than the background. Only the first case can leave air inside the outline.
     const air = O ? percentileSorted(O, 30) : 0, bright = !O || mIn >= median(O);
     const airT = bright && O ? air + 0.3 * (mIn - air) : -1;
-    const tE = Math.max(mE, mD) - k * c - 0.5 * Math.max(mE - mD, 0), tD = mD - k * c;
+    return { mE, mD, mIn, c, air, bright, airT, resto, restoArea, rootFill, restoT };
+  }
+  const darkT = (st, k) => ({ tE: Math.max(st.mE, st.mD) - k * st.c - 0.5 * Math.max(st.mE - st.mD, 0), tD: st.mD - k * st.c });
+  // share of each side of the tooth neck that is dark: burn-out darkens both sides alike
+  function neckDark(g, valid, th) {
+    const { eff } = T, { neck } = xrayRefs(), n = [0, 0, 0], d = [0, 0, 0];
+    for (let i = 0; i < g.length; i++) {
+      const s = neck[i];
+      if (!s || !valid[i]) continue;
+      n[s]++;
+      if (g[i] < (eff[i] === Z.EN ? th.tE : th.tD)) d[s]++;
+    }
+    return [n[1] > 200 ? d[1] / n[1] : 0, n[2] > 200 ? d[2] / n[2] : 0];
+  }
+  // Dark (radiolucent) areas in the crown that open onto the tooth surface or a filling.
+  // g: grey image already in the template frame (W*H); valid: 1 where the image covers the frame;
+  // k: how much darker than sound tissue counts, as a share of the crown's contrast range.
+  function findDark(g, valid, k) {
+    const { W, H, eff, S } = T, N = W * H, { cervY, neck } = xrayRefs(), st = frameStats(g, valid);
+    if (!st) return null;
+    const th = darkT(st, k), { resto, airT } = st;
     let cand = new Uint8Array(N);
     for (let i = 0; i < N; i++) {
-      if (!valid[i] || (i / W | 0) > cervY + 10) continue;
-      if (eff[i] === Z.EN) cand[i] = g[i] < tE ? 1 : 0;
-      else if (eff[i] === Z.DE) cand[i] = g[i] < tD ? 1 : 0;
+      if (!valid[i] || resto[i] || (i / W | 0) > cervY + 10) continue;
+      if (eff[i] === Z.EN) cand[i] = g[i] < th.tE ? 1 : 0;
+      else if (eff[i] === Z.DE) cand[i] = g[i] < th.tD ? 1 : 0;
     }
     cand = opening(cand, W, H, 5);
+    const nearResto = st.restoArea ? dilate(resto, W, H, 9) : null;
     const cc = components(cand, W, H, true), n = cc.n;
-    const minS = new Float32Array(n + 1).fill(9), maxS = new Float32Array(n + 1), airN = new Int32Array(n + 1), keep = new Uint8Array(n + 1);
+    const minS = new Float32Array(n + 1).fill(9), maxS = new Float32Array(n + 1), airN = new Int32Array(n + 1),
+      neckN = new Int32Array(n + 1), byResto = new Uint8Array(n + 1), keep = new Uint8Array(n + 1);
     for (let i = 0; i < N; i++) {
       const l = cc.lab[i];
       if (!l) continue;
       if (S[i] < minS[l]) minS[l] = S[i];
       if (S[i] > maxS[l]) maxS[l] = S[i];
       if (g[i] < airT) airN[l]++;
+      if (neck[i]) neckN[l]++;
+      if (nearResto && nearResto[i]) byResto[l] = 1;
     }
-    // keep patches that start at the surface; drop air-dark slivers along the outline, which are
-    // what a slightly-off fit leaves behind rather than decay
+    // Burn-out: the neck of the tooth, covered by neither enamel nor bone, shows dark on both sides.
+    const [nl, nr] = neckDark(g, valid, th), burnout = st.bright && nl >= 0.18 && nr >= 0.18;
+    let dropped = 0, secondary = false;
     for (let l = 1; l <= n; l++) {
+      // drop air-dark slivers along the outline, which a slightly-off fit leaves behind
       const airy = airN[l] > 0.6 * cc.area[l] || (airN[l] > 0.4 * cc.area[l] && maxS[l] < 0.6);
-      keep[l] = cc.area[l] >= 60 && minS[l] <= 0.6 && !airy ? 1 : 0;
+      const atNeck = neckN[l] >= 0.6 * cc.area[l];
+      keep[l] = cc.area[l] >= 60 && (minS[l] <= 0.6 || byResto[l]) && !airy ? 1 : 0;
+      if (keep[l] && burnout && atNeck) { keep[l] = 0; dropped += cc.area[l]; }
+      if (keep[l] && byResto[l]) secondary = true;
     }
     const mask = new Uint8Array(N);
     let area = 0;
     for (let i = 0; i < N; i++) if (keep[cc.lab[i]]) { mask[i] = 1; area++; }
-    return { mask, area, bright, mE, mD, c, air };
+    return { mask, area, bright: st.bright, mE: st.mE, mD: st.mD, c: st.c, air: st.air, burnout, burnoutArea: dropped, neck: [nl, nr], secondary };
+  }
+  // where a lesion sits on the crown: the occlusal surface, a proximal (side) surface or the neck
+  function lesionSite(core) {
+    const { W, S, eff } = T, { cervY, midX } = xrayRefs(), votes = { occlusal: 0, proximal: 0, cervical: 0 };
+    let best = 9, bi = -1, side = 0;
+    const vote = (i) => {
+      const x = i % W, y = (i / W) | 0;
+      const site = y < 100 && x >= 78 && x <= 374 ? 'occlusal' : y >= cervY - 55 ? 'cervical' : 'proximal';
+      votes[site]++; side += x < midX ? -1 : 1;
+    };
+    for (let i = 0; i < core.length; i++) if (core[i]) {
+      if (S[i] < best) { best = S[i]; bi = i; }
+      if (eff[i] === Z.EN && S[i] <= 0.35) vote(i);
+    }
+    if (bi < 0) return null;
+    if (!votes.occlusal && !votes.proximal && !votes.cervical) vote(bi);
+    const site = Object.keys(votes).sort((a, b) => votes[b] - votes[a])[0];
+    return { site, side: side < 0 ? 'left' : 'right', fromSurface: best <= 0.35 };
+  }
+  // A dark halo around a root tip (compared with the bone a little further out) can be apical
+  // periodontitis. Only judged when the image covers the root tips.
+  function apexCheck(g, valid, c) {
+    const { W, H, sil } = T, { apex, dIn } = xrayRefs();
+    return apex.map(([ax, ay]) => {
+      const r1 = [], r2 = [];
+      let n1 = 0, n2 = 0;
+      for (let y = Math.max(0, ay - 60); y < H; y++) for (let x = Math.max(0, ax - 60); x <= Math.min(W - 1, ax + 60); x++) {
+        const i = y * W + x, d = Math.hypot(x - ax, y - ay);
+        if (sil[i]) continue;
+        if (d >= 5 && d <= 24 && y >= ay - 25) { n1++; if (valid[i]) r1.push(g[i]); }
+        else if (d >= 32 && d <= 60 && y >= ay - 60) { n2++; if (valid[i]) r2.push(g[i]); }
+      }
+      if (n1 < 100 || n2 < 150 || r1.length < 0.85 * n1 || r2.length < 0.85 * n2) return { covered: false };
+      const m1 = median(r1), m2 = median(r2), drop = (m2 - m1) / c;
+      return { covered: true, dark: drop >= 0.12, drop, at: [ax, ay] };
+    });
+  }
+  // How good is the image for reading decay? An ideal radiograph has high contrast; a grey,
+  // too light or too dark film hides early lesions or exaggerates burn-out.
+  function imageCheck(g, valid, st) {
+    const v = [];
+    for (let i = 0; i < g.length; i += 3) if (valid[i]) v.push(g[i]);
+    if (v.length < 1000) return null;
+    const s = Float64Array.from(v).sort(), range = percentileSorted(s, 98) - percentileSorted(s, 2);
+    return { range, lowContrast: range < 80, dark: st.bright && st.mE < 115, light: st.bright && st.air > 115 };
+  }
+  // Everything the page reports beside the depth: site, fillings, burn-out, root tips, image quality.
+  function inspect(g, valid, core, k) {
+    const st = frameStats(g, valid);
+    if (!st) return null;
+    const th = darkT(st, k), [nl, nr] = neckDark(g, valid, th);
+    let secondary = false;
+    if (st.restoArea && core) {
+      const near = dilate(st.resto, T.W, T.H, 9);
+      for (let i = 0; i < core.length; i++) if (core[i] && near[i]) { secondary = true; break; }
+    }
+    return {
+      site: core ? lesionSite(core) : null, filling: st.restoArea > 0, rootFilling: st.rootFill >= 100, secondary,
+      burnout: st.bright && nl >= 0.18 && nr >= 0.18, neck: [nl, nr], apex: apexCheck(g, valid, st.c), image: imageCheck(g, valid, st),
+    };
   }
 
   const api = { P, Z, init, analyseImage, analyseDrawing, warpColour, classify, get T() { return T; },
-    xray: { otsu, toothBlobs, fitBlob, autoFit, refineFit, fit: xrayFit, findDark },
+    xray: { otsu, toothBlobs, fitBlob, autoFit, refineFit, fit: xrayFit, findDark, inspect, lesionSite },
     _internal: { inkMap, resizeArea, resizeLinear, edt, components, fillOutline, toothCandidates, register, warp, fitHomography, fitAffine, fitSimilarity } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CariesEngine = api;
@@ -1556,6 +1695,7 @@ function renderProbe(b, r) {
 }
 function renderReading(r, srcText) {
   $('#src').textContent = srcText;
+  $('#findings').innerHTML = '';
   const warn = $('#warn');
   warn.classList.remove('on');
   if (!r.ok) {
@@ -1797,7 +1937,7 @@ $('#m-draw').onclick = () => setMode('draw');
 const XSAMPLES = [['xray-enamel', 'Enamel'], ['xray-dentin', 'Dentin'], ['xray-pulp', 'Pulp'], ['xray-sound', 'Sound']];
 const xr = {
   img: null, iw: 0, ih: 0, mask: null, maskC: null, maskG: null, undo: [], label: '',
-  p: null, s0: 1, tool: 'move', brush: 9, sens: 6, auto: false, res: null, timer: 0, found: null,
+  p: null, s0: 1, tool: 'move', brush: 9, sens: 6, auto: false, aligned: false, res: null, timer: 0, found: null,
 };
 function xrM() {
   const { cx, cy, s, rot, asp, k, flip } = xr.p, co = Math.cos(rot), si = Math.sin(rot), f = flip ? -1 : 1;
@@ -1901,11 +2041,54 @@ function xrClassify() {
   xr.res = r;
   renderLesion(r.maps.grown, r);
   renderReading(r, xr.label);
+  renderFindings(xrFindings(r));
+  // circle a root tip flagged as dark, so the note has something to point at
+  for (const a of (xr.info && xr.info.apex) || []) if (a.covered && a.dark) {
+    gLes.save(); gLes.setLineDash([12, 9]); gLes.lineWidth = 5; gLes.strokeStyle = '#fff'; gLes.beginPath(); gLes.arc(a.at[0] * K, a.at[1] * K, 34 * K, 0, 7); gLes.stroke();
+    gLes.lineWidth = 3; gLes.strokeStyle = '#d7263d'; gLes.stroke(); gLes.restore();
+  }
 }
-function xrChanged() {
+// What the radiology atlas says to look at beside the depth: which surface, burn-out, fillings,
+// root tips and image quality. Each item is [title, text, caution?].
+const SITE = {
+  occlusal: ['On the biting (occlusal) surface', 'Fissure decay shows on a radiograph only late, once it is well into dentin, because the whole crown lies over it. It is usually larger than it looks.'],
+  proximal: ['On a side (proximal) surface', 'Bite-wing radiographs show decay between teeth best; on other views it is easy to miss or to underrate.'],
+  cervical: ['At the neck of the tooth', 'Compare with the other side of the tooth and the neighbours: a dark band at the neck on both sides is burn-out, not decay. Check it clinically.'],
+};
+function xrFindings(r) {
+  xr.info = null;
+  if (!xr.aligned) return [['Line the tooth up first', 'The checks for fillings, burn-out, root tips and image quality run once the outline sits on the tooth.', false]];
+  const fr = xrFrame(), les = r.pred !== 'normal';
+  const info = E.xray.inspect(fr.g, fr.valid, les ? r.maps.core : null, 0.62 - 0.05 * xr.sens);
+  if (!info) return [];
+  xr.info = info;
+  const out = [], deep = r.pred === 'pulp' || (r.pred === 'dentin' && r.depth >= 5 / 3);
+  const secondary = les && info.secondary;
+  if (secondary) out.push(['Dark area against a filling', 'A very bright (radiopaque) filling or crown with the marked dark area right against it: possible secondary (recurrent) decay. Some liners and tooth-coloured fillings also look dark, so check it clinically.', true]);
+  else if (les && info.site) out.push([...SITE[info.site.site], info.site.site === 'cervical']);
+  if (info.burnout) out.push(['Cervical burn-out', 'Both sides of the tooth neck look dark. The neck is covered by neither enamel nor bone, so X-rays pass easily and it shows dark on most radiographs. Find dark areas leaves it out.', false]);
+  if (info.filling && !secondary) out.push(['Filling or crown seen', 'A very bright (radiopaque) area. Bite-wings also show whether its edges seal well or overhang.', false]);
+  if (info.rootFilling) out.push(['Root canal filling seen', 'The tooth has had root canal treatment, so the pulp reading does not mean the same as for an untreated tooth.', false]);
+  const ap = info.apex.filter(a => a.covered);
+  if (ap.some(a => a.dark)) out.push(['Dark area at a root tip', 'Possible apical periodontitis, which often follows decay into the pulp; a sharp border with a bright rim suggests a long-standing lesion. A radiograph can only call it possible: anatomy such as the mental foramen can look the same (an intact ligament space around the tip argues against a lesion).', true]);
+  else if (deep && ap.length) out.push(['Root tips', 'No dark area seen around the root tips. Early inflammation shows nothing on a radiograph, and no radiograph can show whether the pulp is alive.', false]);
+  else if (deep) out.push(['Root tips not in view', 'A periapical radiograph shows the root tips and the bone around them; a bite-wing does not.', false]);
+  const im = info.image, p = xr.p;
+  if (im && im.lowContrast) out.push(['Low contrast', 'The image is grey and flat. Early lesions can be missed and lesions look smaller than they are.', true]);
+  else if (im && im.light) out.push(['Image looks light', 'Under-exposed or under-developed: lesions look smaller than they are and early ones can be missed.', true]);
+  else if (im && im.dark) out.push(['Image looks dark', 'Over-exposed: burn-out at the neck is stronger and dark areas can look bigger than they are.', true]);
+  if (Math.abs(Math.log2(p.asp)) > 0.3 || Math.abs(p.k) > 0.25) out.push(['Tooth stretched to fit', 'The outline had to be stretched a lot. A bent film or an angled beam distorts teeth, so the depth reading is less reliable.', true]);
+  return out;
+}
+function renderFindings(list) {
+  const esc = (t) => t.replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]);
+  $('#findings').innerHTML = list.map(([t, d, w]) => `<li class="${w ? 'caution' : ''}"><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join('');
+}
+function xrChanged(aligned = true) {
+  xr.aligned = aligned; // any move by hand counts as lining the tooth up
   xrRender(); xrSyncSliders();
   clearTimeout(xr.timer);
-  xr.timer = setTimeout(() => { if (xr.auto) xrFind(false); else xrClassify(); }, xr.auto ? 220 : 90);
+  xr.timer = setTimeout(() => { if (xr.auto && xr.aligned) xrFind(false); else xrClassify(); }, xr.auto ? 220 : 90);
 }
 function xrIdle() {
   xrDrawOutline(); xrRender(); gLes.clearRect(0, 0, W * K, H * K);
@@ -1953,6 +2136,7 @@ async function xrLoad(blob, label, route) {
     xrContain();
     await new Promise(r => setTimeout(r, 30));
     const fit = await xrAutoFit();
+    xr.aligned = fit.ok;
     if (route && !fit.ok && looksLikePaper(imageStats(c))) { // a photo of the printed diagram picked in X-ray mode
       const p = await readDiagram(c);
       if (p.res.ok && p.res.quality >= 0.6) {
@@ -2001,15 +2185,15 @@ $('#x-size').oninput = (e) => { if (!xr.img) return; xr.p.s = xr.s0 * 2 ** +e.ta
 $('#x-rot').oninput = (e) => { if (!xr.img) return; xr.p.rot = +e.target.value * Math.PI / 180; xrChanged(); };
 $('#x-width').oninput = (e) => { if (!xr.img) return; xr.p.asp = 2 ** +e.target.value; xrChanged(); };
 $('#x-mirror').onclick = () => { if (!xr.img) return; xr.p.flip = !xr.p.flip; xrChanged(); };
-$('#x-reset').onclick = () => { if (!xr.img) return; xrContain(); $('#x-fitnote').textContent = ''; xrChanged(); };
+$('#x-reset').onclick = () => { if (!xr.img) return; xrContain(); $('#x-fitnote').textContent = ''; xrChanged(false); };
 $('#x-fit').onclick = async () => {
   if (!xr.img) return;
   setBusy(true, 'Lining up the tooth…');
   try {
-    const fit = await xrAutoFit(true);
+    const fit = await xrAutoFit(true), was = xr.aligned;
     xrFitNote(fit);
     if (fit.ok && !xr.mask.some(v => v)) xr.auto = true; // nothing marked yet: look for decay once fitted
-    xrChanged();
+    xrChanged(fit.ok || was);
   } finally { setBusy(false); }
 };
 

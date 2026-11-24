@@ -37,6 +37,25 @@ Any static host works. With GitHub Pages: **Settings → Pages → Build and dep
 
 On simulated radiographs built from the reference molar (in `samples/xray-*.jpg`), all four examples read correctly. On 16 harder simulated variants (tilted, upside-down, small, noisy, low-contrast, with touching neighbours), 10 read correctly fully automatically. The other 6 had several teeth in view, and auto-fit picked a neighbour or asked for help. All 16 read correctly after a rough manual placement and Auto-fit. A real radiograph of a differently shaped tooth only fits the reference roughly, and overlapping teeth, fillings, cervical burn-out and pulp horns can look like decay. That is why the marked area can be edited.
 
+### What the radiology atlas added
+
+The X-ray checks and the "Reading decay on a radiograph" section on the page are based on F. A. Pasler, *Color Atlas of Dental Medicine: Radiology* (Thieme). They draw on its chapters on bite-wing radiographs, radiographic anatomy of periapical films, errors in technique and processing, regressive changes, apical periodontitis, and filling materials. The page summarises these in its own words; no text or figures are copied. Once the outline is fitted, X-ray mode also reports:
+
+- **Which surface the lesion is on**, with the atlas's point for each. *Occlusal*: fissure decay shows only late and is bigger than it looks. *Proximal*: bite-wings show it best. *Cervical*: check for burn-out.
+- **Cervical burn-out**: the neck of the tooth is covered by neither enamel nor bone, so it shows dark. When both sides of the neck are dark, they are reported as burn-out and left out of Find dark areas.
+- **Fillings, crowns and root fillings**: very bright (radiopaque) areas are kept out of the "sound tooth" brightness. A dark area against one is flagged as possible secondary decay.
+- **Root tips**: when they are in view, a dark halo around one is circled and flagged as *possible* apical periodontitis. The note carries the atlas's caveats: early inflammation shows nothing, anatomy can mimic a lesion, and no radiograph shows whether the pulp is alive.
+- **Image quality**: low-contrast, light (under-exposed) or dark (over-exposed) images, and a tooth that had to be stretched a lot to fit (a sign of a bent film or angled beam).
+
+These checks were tested on 9 simulated radiographs, and each was reported correctly:
+- burn-out on a sound tooth and next to enamel decay
+- proximal enamel and dentin lesions
+- a filling alone, and a filling with secondary decay
+- pulp decay with and without a root-tip lesion
+- a low-contrast image
+
+On the 16 harder variants they raised no false alarms. Where auto-fit failed, they wait until the tooth is lined up.
+
 If someone picks an X-ray in Diagram mode, it opens in X-ray mode. A photo of the printed diagram picked in X-ray mode opens in Diagram mode.
 
 ## Files
