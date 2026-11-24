@@ -7,7 +7,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script type="application/json" id="claude-artifacts-manifest">{"permissions": []}</script>
+<meta name="description" content="Upload a photo of a shaded molar diagram, a dental X-ray or a cut tooth and read how deep the caries goes: enamel, dentin or pulp.">
+<meta name="theme-color" content="#0b141d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <style>
 /* VOICE clinical teaching tool: precise, calm, few hues, fine detail
    IDEA a dental light box with a periodontal probe: the photographed tooth sits aligned on a dark film panel, depth is read off a banded probe
@@ -100,9 +104,31 @@ button,input,label.btn{font:inherit}
 .thumb img{width:100%;display:block;border-radius:6px}
 .thumb b{display:block;font-size:12.5px;font-weight:600;padding:3px 0 4px;white-space:nowrap}
 .thumb[aria-current=true]{border-color:var(--red);box-shadow:0 0 0 2px var(--red)}
-.drawctl{display:none}
-.drawmode .drawctl{display:block}
-.drawmode .photoctl{display:none}
+.drawctl,.xrayctl{display:none}
+.drawmode .drawctl,.xraymode .xrayctl{display:block}
+.drawmode .photoctl,.xraymode .photoctl{display:none}
+.xsteps{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.xsteps li{border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+.xsteps h3{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.xsteps h3+.hint{margin-top:0}
+.num{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--bg);font-size:14px;font-weight:700;flex:none}
+.sliders{display:grid;margin-top:4px}
+.sliders .range span,.xsteps .range span{min-width:74px}
+.sliders input[type=range]{flex:1;width:auto}
+.xhelp{position:absolute;left:0;right:0;bottom:56px;margin:0;text-align:center;color:#dbe4ec;font-size:13px;pointer-events:none}
+.xnote{display:none;margin-top:12px;font-size:14px;color:var(--muted);border-left:3px solid var(--line);padding-left:10px}
+.xraymode .xnote{display:block}
+.xraymode .stack{background:#000}
+.xraymode #c-tint{opacity:.55}
+.stack.moving{cursor:grab}
+.stack.moving.grabbing{cursor:grabbing}
+.stack:focus-visible{outline:3px solid var(--enamel);outline-offset:3px}
+.xexplain{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:22px}
+.step2{border:1px solid var(--line);border-radius:14px;padding:16px}
+.step2 p{color:var(--muted);font-size:14.5px;margin-top:6px}
+.xlimits{margin-top:18px}
+@media (max-width:900px){.xexplain{grid-template-columns:minmax(0,1fr)}}
+@media (min-width:761px){.viewer{align-self:start;position:sticky;top:16px;min-height:min(calc(100vh - 32px),780px)}}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
 .chip{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;min-height:44px;padding:0 16px;font-weight:600;cursor:pointer}
 .chip[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -140,6 +166,8 @@ footer p+p{margin-top:6px}
 .viewer{margin:0 calc(-1*max(5vw,16px));border-radius:0;padding:44px 12px 58px}
 .stack{width:min(100%,calc(min(54vh,500px)*.6656))}
 .inset{display:none}
+.xraymode .viewer{padding-bottom:82px}
+.xhelp{bottom:52px;font-size:12.5px}
 .lede{font-size:15px}
 .top{padding-top:18px}
 .busy{border-radius:0}
@@ -156,11 +184,12 @@ footer p+p{margin-top:6px}
   <div class="wrap">
     <div>
       <h1>Caries Depth Checker</h1>
-      <p class="lede">Photograph the shaded molar diagram or shade it here. The app lines it up with the reference molar and reads how deep the lesion goes.</p>
+      <p class="lede">Upload a photo of the shaded molar diagram, a dental X-ray or a cut tooth, or shade one here. The app lines it up with the reference molar and reads how deep the lesion goes.</p>
     </div>
     <div class="modes">
       <div class="seg" role="group" aria-label="Mode">
-        <button id="m-photo" aria-pressed="true">Photo</button>
+        <button id="m-photo" aria-pressed="true">Diagram</button>
+        <button id="m-xray" aria-pressed="false">X-ray</button>
         <button id="m-draw" aria-pressed="false">Draw</button>
       </div>
       <button class="ghost" id="install" hidden>Install as app</button>
@@ -176,6 +205,7 @@ footer p+p{margin-top:6px}
       <div class="stack" id="stack">
         <canvas id="c-base"></canvas>
         <canvas id="c-tint"></canvas>
+        <canvas id="c-line"></canvas>
         <canvas id="c-paint"></canvas>
         <canvas id="c-les"></canvas>
       </div>
@@ -186,6 +216,7 @@ footer p+p{margin-top:6px}
         </span>
         <span class="rchip" id="rchip"><span class="dot"></span><span>Reading…</span></span>
       </div>
+      <p class="xhelp" id="xhelp" hidden>Drag to move · pinch or scroll to size</p>
       <div class="busy" id="busy"><div><div class="ring"></div><span id="busytext">Reading the photo…</span></div></div>
     </section>
 
@@ -198,6 +229,7 @@ footer p+p{margin-top:6px}
       <ul class="tissues" id="tissues"></ul>
       <p class="why" id="why"></p>
       <p class="warn" id="warn"></p>
+      <p class="xnote" id="xnote">X-ray reading is an estimate made on the reference molar. Check that the outline fits the tooth and that the red area is the decay; it is not a diagnosis.</p>
       <div class="mg"><h3>Usual management</h3><p id="mgmt"></p></div>
       <p class="meta" id="meta"></p>
     </section>
@@ -208,8 +240,57 @@ footer p+p{margin-top:6px}
           <label class="btn">Take a photo<input type="file" id="f-cam" accept="image/*" capture="environment"></label>
           <label class="btn alt">Choose a photo<input type="file" id="f-pick" accept="image/*"></label>
         </div>
-        <p class="hint">Or open one of your own dataset photos:</p>
+        <p class="hint">Photograph the printed molar diagram after shading it. Or open one of your own dataset photos:</p>
         <div class="thumbs" id="thumbs"></div>
+      </div>
+      <div class="xrayctl">
+        <ol class="xsteps">
+          <li>
+            <h3><span class="num">1</span>Choose an X-ray or tooth photo</h3>
+            <div class="btns">
+              <label class="btn">Take a photo<input type="file" id="x-cam" accept="image/*" capture="environment"></label>
+              <label class="btn alt">Choose an image<input type="file" id="x-pick" accept="image/*"></label>
+            </div>
+            <p class="hint">One molar seen from the side works best: a periapical or bitewing X-ray, or a photo of a tooth cut in half. Or try a simulated X-ray:</p>
+            <div class="thumbs" id="xthumbs"></div>
+          </li>
+          <li>
+            <h3><span class="num">2</span>Line the tooth up with the outline</h3>
+            <p class="hint">Crown at the top, roots down. Drag the image, pinch or scroll to size it, or use the sliders. Several teeth in the picture? Zoom roughly onto the one you want and press Auto-fit to snap to it.</p>
+            <div class="row">
+              <button class="chip" id="x-fit">Auto-fit</button>
+              <button class="chip" id="x-mirror">Mirror</button>
+              <button class="chip" id="x-reset">Reset</button>
+            </div>
+            <div class="sliders">
+              <label class="range" for="x-size"><span>Size</span><input type="range" id="x-size" min="-2" max="2.5" step="0.01" value="0"></label>
+              <label class="range" for="x-rot"><span>Turn</span><input type="range" id="x-rot" min="-180" max="180" step="0.5" value="0"></label>
+              <label class="range" for="x-width"><span>Width</span><input type="range" id="x-width" min="-0.6" max="0.6" step="0.01" value="0"></label>
+            </div>
+            <p class="hint" id="x-fitnote" aria-live="polite"></p>
+          </li>
+          <li>
+            <h3><span class="num">3</span>Mark the decay</h3>
+            <p class="hint">Decay shows as a dark (radiolucent) patch that starts at the tooth surface. Find it automatically, then correct it with the brush.</p>
+            <div class="row">
+              <button class="chip" id="x-find">Find dark areas</button>
+              <label class="range" for="x-sens"><span>Sensitivity</span><input type="range" id="x-sens" min="1" max="10" step="1" value="6"></label>
+            </div>
+            <div class="row">
+              <div class="seg" role="group" aria-label="What dragging on the image does">
+                <button id="x-move" aria-pressed="true">Move</button>
+                <button id="x-shade" aria-pressed="false">Shade</button>
+                <button id="x-erase" aria-pressed="false">Erase</button>
+              </div>
+              <label class="range" for="x-brush"><span>Brush</span><input type="range" id="x-brush" min="4" max="22" value="9"></label>
+            </div>
+            <div class="row">
+              <button class="chip" id="x-undo">Undo</button>
+              <button class="chip" id="x-clear">Clear</button>
+            </div>
+            <p class="hint" id="x-marknote" aria-live="polite"></p>
+          </li>
+        </ol>
       </div>
       <div class="drawctl">
         <p class="hint" style="margin-top:0">Shade a lesion on the tooth with your finger or mouse. The reading updates as you draw.</p>
@@ -249,10 +330,23 @@ footer p+p{margin-top:6px}
   </div>
 </section>
 
+<section class="band sect" id="xray">
+  <div class="wrap">
+    <h2>Reading an X-ray or a cut tooth</h2>
+    <p class="sub">The same depth scale, applied to a real image. You line the tooth up with the reference molar; everything after that runs on your device.</p>
+    <div class="xexplain">
+      <div class="step2"><h3>Fits the outline</h3><p>Auto-fit finds the brightest tooth-shaped blob near the middle of the image and fits the reference molar to its silhouette, in any rotation and either way round. You can move, size, turn and stretch it by hand.</p></div>
+      <div class="step2"><h3>Looks for dark areas</h3><p>Decay lets more X-rays through, so it shows darker than sound enamel and dentin. The app compares each point of the crown with the sound tissue around it and keeps dark patches that open onto the tooth surface.</p></div>
+      <div class="step2"><h3>Reads the depth</h3><p>The marked area is read with the same depth index and the same two thresholds fitted to your diagram dataset: past 29% of the way from the junction to the pulp is dentin, touching the pulp outline is pulp.</p></div>
+    </div>
+    <p class="sub xlimits">Limits: the reference is one molar, so a tooth with a different shape only fits roughly, and the depth reading is only as good as that fit. Overlapping teeth, fillings, burn-out at the neck of the tooth and the pulp horns can look like decay. The X-ray reading has not been checked against labelled radiographs.</p>
+  </div>
+</section>
+
 <section class="band sect" id="accuracy">
   <div class="wrap">
     <h2>All 77 of your labelled photos read correctly</h2>
-    <p class="sub">Checked against the folders in your LandingLens dataset. The 80 photos collapse to 77 unique labelled ones: the caries folder repeats enamel and dentin, and three normal photos are duplicates.</p>
+    <p class="sub">Diagram photos, checked against the folders in your LandingLens dataset. The 80 photos collapse to 77 unique labelled ones: the caries folder repeats enamel and dentin, and three normal photos are duplicates.</p>
     <div class="acc">
       <div>
         <div class="figs">
@@ -294,8 +388,8 @@ footer p+p{margin-top:6px}
           <li>Shoot from above in even light, without a hard shadow across the tooth.</li>
           <li>Touching the pulp outline counts as pulp involvement, so stop short of it if you mean dentin.</li>
         </ul>
-        <div class="btns" style="margin-top:18px"><button class="btn" id="dl" hidden>Download printable diagram (PDF)</button></div>
-        <p class="dlnote" id="dlnote">The printable PDF can be saved where downloads are available, such as Claude on a computer.</p>
+        <div class="btns" style="margin-top:18px"><button class="btn" id="dl">Download printable diagram (PDF)</button></div>
+        <p class="dlnote" id="dlnote" aria-live="polite"></p>
       </div>
     </div>
   </div>
@@ -303,7 +397,7 @@ footer p+p{margin-top:6px}
 
 <footer class="band">
   <div class="wrap">
-    <p>A teaching aid for this molar diagram. It does not diagnose real teeth, intraoral photos or radiographs; treatment decisions need a clinical examination.</p>
+    <p>A teaching aid. It does not diagnose real teeth: the X-ray mode maps a dark area onto a reference molar and has not been validated on radiographs. Treatment decisions need a dentist's clinical examination.</p>
     <p>Built from the Caries depth dataset: normal, enamel, dentin and pulp folders.</p>
   </div>
 </footer>
@@ -1071,7 +1165,234 @@ footer p+p{margin-top:6px}
     return crop.c.map(p => warp(p, crop.w, crop.h, M, T.W, T.H, 255));
   }
 
+  // ------------------------------------------------------------------ X-ray and tooth-photo helpers
+  // A radiograph or a photo of a cut tooth has no printed lines to lock onto, so the fit uses the
+  // tooth silhouette only and the person corrects it by hand. Images here are grey, 0..255.
+  function otsu(vals) {
+    const hist = new Float64Array(256);
+    let n = 0, sum = 0;
+    for (let i = 0; i < vals.length; i++) { const v = vals[i], b = v < 0 ? 0 : v > 255 ? 255 : v | 0; hist[b]++; n++; sum += b; }
+    let wB = 0, sB = 0, best = -1, thr = 128;
+    for (let t = 0; t < 256; t++) {
+      wB += hist[t];
+      if (!wB) continue;
+      const wF = n - wB;
+      if (!wF) break;
+      sB += t * hist[t];
+      const d = sB / wB - (sum - sB) / wF, v = wB * wF * d * d;
+      if (v > best) { best = v; thr = t; }
+    }
+    return thr;
+  }
+  // Tooth-shaped blobs, most likely first. An X-ray has several grey levels (air < bone < dentin <
+  // enamel), so blobs are cut at a few levels and with two opening sizes to split touching teeth.
+  function toothBlobs(g, w, h) {
+    const N = w * h, t1 = otsu(g), hi = [], lo = [];
+    for (let i = 0; i < N; i++) (g[i] > t1 ? hi : lo).push(g[i]);
+    const t2 = hi.length > 100 ? otsu(hi) : t1, t0 = lo.length > 100 ? otsu(lo) : t1;
+    const cands = [], wholes = [];
+    for (const [thr, bright] of [[t2, true], [(t1 + t2) / 2, true], [t1, true], [t1, false], [t0, false]]) {
+      const m0 = new Uint8Array(N);
+      for (let i = 0; i < N; i++) m0[i] = (g[i] > thr) === bright ? 1 : 0;
+      for (const kf of [90, 40]) {
+        const k = Math.max(3, Math.round(Math.min(w, h) / kf) | 1), m = opening(m0, w, h, k), cc = components(m, w, h, false);
+        // the whole level as one candidate too: a deep lesion can cut a tooth's silhouette in two
+        if (bright && kf === 90) wholes.push({ sil: fillOutline(closing(m, w, h, 2 * k + 1), w, h), whole: true });
+        for (let l = 1; l <= cc.n; l++) {
+          if (cc.area[l] < 0.02 * N) continue;
+          const edges = (cc.x0[l] === 0) + (cc.y0[l] === 0) + (cc.x1[l] === w - 1) + (cc.y1[l] === h - 1);
+          if (edges >= 3) continue;
+          const blob = new Uint8Array(N);
+          for (let i = 0; i < N; i++) if (cc.lab[i] === l) blob[i] = 1;
+          const sil = fillOutline(closing(blob, w, h, 2 * k + 1), w, h), st = shapeStats(sil, w, h);
+          const dx = st.cx / w - 0.5, dy = st.cy / h - 0.5;
+          const score = Math.sqrt(st.area) * Math.exp(-(dx * dx + dy * dy) / 0.08) * Math.exp(-(((st.elong - P.TPL_ELONG) / 0.7) ** 2)) *
+            Math.exp(-(((st.fill - P.TPL_FILL) / 0.3) ** 2)) * (bright ? 1 : 0.6) / (1 + edges);
+          cands.push({ sil, score, area: st.area, cx: st.cx, cy: st.cy });
+        }
+      }
+    }
+    cands.sort((a, b) => b.score - a.score);
+    const out = []; // drop near-duplicates (same blob found at another level)
+    for (const c of cands) {
+      if (out.some(o => Math.abs(o.area - c.area) < 0.05 * c.area && Math.hypot(o.cx - c.cx, o.cy - c.cy) < 0.03 * Math.max(w, h))) continue;
+      out.push(c);
+    }
+    return { blobs: out, wholes };
+  }
+  // snap to the tooth under a placement the person made by hand: ICP from there on each grey level
+  function refineFit(g, w, h, M0) {
+    const { wholes } = toothBlobs(g, w, h);
+    let best = null;
+    for (const c of wholes) {
+      const b = pointsOf(boundaryMask(c.sil, w, h), w, h, 4000);
+      if (b.n < 50) continue;
+      const det = M0[0] * M0[4] - M0[1] * M0[3], F = det < 0 ? [-1, 0, w - 1, 0, 1, 0, 0, 0, 1] : I3();
+      const pts = det < 0 ? { x: b.x.map(x => w - 1 - x), y: b.y, n: b.n } : b, start = mul3(M0, F);
+      for (const model of ['similarity', 'affine']) {
+        const Mm = icp(pts, T.silNear, model === 'similarity' ? start : (best && best.F === F ? best.Mm : start), 30, model, 30, 80);
+        if (!Mm) continue;
+        if (model === 'affine') { const [s1, s2] = svd2(Mm[0], Mm[1], Mm[3], Mm[4]); if (s1 / Math.max(s2, 1e-9) > 1.6) continue; }
+        const M = mul3(Mm, F), q = silIoU(c.sil, w, h, M);
+        if (!best || q > best.q) best = { M, Mm, F, q };
+      }
+    }
+    return best && { M: best.M, q: best.q };
+  }
+  // best fit of the reference molar over the most likely blobs
+  function autoFit(g, w, h) {
+    const { blobs, wholes } = toothBlobs(g, w, h);
+    let best = null;
+    for (const c of blobs.slice(0, 4).concat(wholes)) {
+      if (c.whole && best && best.sel >= 0.85) break;
+      const f = fitBlob(c.sil, w, h, c.whole);
+      if (f && (!best || f.sel > best.sel)) best = f;
+      if (best && best.sel >= 0.92) break;
+    }
+    return best;
+  }
+  // Entry point for the page. With M0 (the person's own placement, image -> template), snap to the
+  // tooth under it first; a snap there is trusted at a lower overlap than a search of the whole image.
+  const FIT_OK = 0.75, FIT_LOCAL = 0.65;
+  function xrayFit(g, w, h, M0) {
+    let fit = M0 ? refineFit(g, w, h, M0) : null;
+    if (fit) fit.local = true;
+    const ok = (f) => !!f && f.q >= (f.local ? FIT_LOCAL : FIT_OK);
+    if (!ok(fit)) { const g2 = autoFit(g, w, h); if (g2 && (!fit || g2.q > fit.q + 0.05)) fit = g2; }
+    return fit ? { M: fit.M, q: fit.q, ok: ok(fit) } : { M: null, q: 0, ok: false };
+  }
+  // overlap of a fitted silhouette with the reference molar, ignoring anything more than 20 px
+  // outside the outline (neighbouring teeth, bone), sampled on every second pixel
+  function silIoU(sil, w, h, M, step) {
+    const { W, H } = T, near = xrayRefs().near, Mi = inv3(M), st = step || 2;
+    let inter = 0, uni = 0;
+    for (let y = 0; y < H; y += st) for (let x = 0; x < W; x += st) {
+      const i = y * W + x, ww = Mi[6] * x + Mi[7] * y + Mi[8];
+      const u = Math.round((Mi[0] * x + Mi[1] * y + Mi[2]) / ww), v = Math.round((Mi[3] * x + Mi[4] * y + Mi[5]) / ww);
+      const a = near[i] && u >= 0 && v >= 0 && u < w && v < h && sil[v * w + u] === 1, b = T.sil[i] === 1;
+      if (a && b) inter++;
+      if (a || b) uni++;
+    }
+    return uni ? inter / uni : 0;
+  }
+  // Fit a silhouette onto the reference molar, either way round and either way up, then a mild
+  // affine. Starts from the blob's moments and, for a blob wider than one tooth (neighbours touching
+  // at the contact points), from upright and tilted guesses spread across it, sized from its height.
+  // Every start gets a few quick ICP rounds; only the best few are run to convergence. With several
+  // teeth in view, a tooth near the middle of the image wins over an equally good one at the side.
+  function fitBlob(sil, w, h, wide) {
+    const m = moments(sil, w, h), b = pointsOf(boundaryMask(sil, w, h), w, h, wide ? 4000 : 2500), { box } = xrayRefs();
+    if (b.n < 50) return null;
+    let x0 = w, x1 = -1, y0 = h, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (sil[y * w + x]) {
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    const tH = box[3] - box[1] + 1, tW = box[2] - box[0] + 1, bcx = (box[0] + box[2]) / 2, bcy = (box[1] + box[3]) / 2;
+    const judge = (M, step) => {
+      const q = silIoU(sil, w, h, M, step), Mi = inv3(M), ww = Mi[6] * bcx + Mi[7] * bcy + Mi[8];
+      const ix = (Mi[0] * bcx + Mi[1] * bcy + Mi[2]) / ww, iy = (Mi[3] * bcx + Mi[4] * bcy + Mi[5]) / ww;
+      const dn = Math.hypot(ix - w / 2, iy - h / 2) / (0.5 * Math.max(w, h));
+      return { q, sel: q - 0.2 * dn * dn };
+    };
+    const runs = [];
+    for (const mirror of [false, true]) {
+      const F = mirror ? [-1, 0, w - 1, 0, 1, 0, 0, 0, 1] : I3();
+      const pts = mirror ? { x: b.x.map(x => w - 1 - x), y: b.y, n: b.n } : b;
+      const mm = mirror ? Object.assign({}, m, { cx: w - 1 - m.cx, theta: -m.theta }) : m;
+      const inits = [initFromMoments(mm, T.m, false), initFromMoments(mm, T.m, true)];
+      const bx0 = mirror ? w - 1 - x1 : x0, bx1 = mirror ? w - 1 - x0 : x1;
+      for (const side of [false, true]) { // tooth upright, or lying on its side
+        const span = side ? x1 - x0 + 1 : y1 - y0 + 1, across = (side ? y1 - y0 + 1 : x1 - x0 + 1) * tH / span;
+        const s = tH / span, n = across > 1.3 * tW ? (wide ? 7 : 5) : 1, base = side ? Math.PI / 2 : 0;
+        for (let j = 0; j < n; j++) for (const r of [0, Math.PI, 0.35, -0.35, Math.PI + 0.35, Math.PI - 0.35]) {
+          const f = (j + 0.5) / n, rr = base + r;
+          const px = side ? (bx0 + bx1) / 2 : bx0 + f * (bx1 - bx0), py = side ? y0 + f * (y1 - y0) : (y0 + y1) / 2;
+          const c = Math.cos(rr) * s, si = Math.sin(rr) * s;
+          inits.push([c, -si, bcx - (c * px - si * py), si, c, bcy - (si * px + c * py), 0, 0, 1]);
+        }
+      }
+      for (const M0 of inits) {
+        const Mm = icp(pts, T.silNear, M0, 8, 'similarity', 30, 80);
+        runs.push(Object.assign({ Mm, F, pts }, judge(mul3(Mm, F), 4)));
+      }
+    }
+    runs.sort((a, b) => b.sel - a.sel);
+    let best = null;
+    for (const r of runs.slice(0, 4)) {
+      const Mm = icp(r.pts, T.silNear, r.Mm, 30, 'similarity', 30, 80), M = mul3(Mm, r.F), j = judge(M);
+      if (!best || j.sel > best.sel) best = Object.assign({ M, Mm, F: r.F, pts: r.pts }, j);
+    }
+    const A = icp(best.pts, T.silNear, best.Mm, 40, 'affine', 15, 80);
+    if (A) {
+      const [s1, s2] = svd2(A[0], A[1], A[3], A[4]), M = mul3(A, best.F), j = judge(M);
+      if (s1 / Math.max(s2, 1e-9) < 1.6 && j.sel >= best.sel - 0.005) best = Object.assign(best, { M }, j);
+    }
+    return { M: best.M, q: best.q, sel: best.sel };
+  }
+  function xrayRefs() {
+    if (T.xr) return T.xr;
+    const { W, H, zones, sil } = T, N = W * H;
+    let cervY = 0;
+    for (let i = 0; i < N; i++) if (zones[i] === Z.EN) cervY = Math.max(cervY, (i / W) | 0);
+    const box = [W, H, -1, -1];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (sil[y * W + x]) {
+      box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], y);
+    }
+    T.xr = { cervY, box, near: dilate(sil, W, H, 41), core: erode(sil, W, H, 21) };
+    return T.xr;
+  }
+  // Dark (radiolucent) areas in the crown that open onto the tooth surface.
+  // g: grey image already in the template frame (W*H); valid: 1 where the image covers the frame;
+  // k: how much darker than sound tissue counts, as a share of the crown's contrast range.
+  function findDark(g, valid, k) {
+    const { W, H, eff, S, outIdx } = T, N = W * H, { cervY, core } = xrayRefs();
+    const en = [], de = [], inner = [], outer = [];
+    for (let i = 0; i < N; i++) {
+      if (!valid[i] || (i / W | 0) > cervY) continue;
+      if (eff[i] === Z.EN) en.push(g[i]); else if (eff[i] === Z.DE) de.push(g[i]);
+      if (core[i]) inner.push(g[i]);
+    }
+    for (let j = 0; j < outIdx.length; j++) { const i = outIdx[j]; if (valid[i] && (i / W | 0) <= cervY) outer.push(g[i]); }
+    if (en.length < 300 || de.length < 300 || inner.length < 300) return null;
+    const sorted = (a) => Float64Array.from(a).sort();
+    const E = sorted(en), D = sorted(de), all = sorted(en.concat(de)), O = outer.length > 50 ? sorted(outer) : null;
+    const mE = percentileSorted(E, 70), mD = percentileSorted(D, 70), mIn = median(inner);
+    const c = Math.max(percentileSorted(all, 95) - percentileSorted(all, 5), 30);
+    // On an X-ray the tooth is brighter than the air around the crown; on a photo of a cut tooth
+    // it may be darker than the background. Only the first case can leave air inside the outline.
+    const air = O ? percentileSorted(O, 30) : 0, bright = !O || mIn >= median(O);
+    const airT = bright && O ? air + 0.3 * (mIn - air) : -1;
+    const tE = Math.max(mE, mD) - k * c - 0.5 * Math.max(mE - mD, 0), tD = mD - k * c;
+    let cand = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      if (!valid[i] || (i / W | 0) > cervY + 10) continue;
+      if (eff[i] === Z.EN) cand[i] = g[i] < tE ? 1 : 0;
+      else if (eff[i] === Z.DE) cand[i] = g[i] < tD ? 1 : 0;
+    }
+    cand = opening(cand, W, H, 5);
+    const cc = components(cand, W, H, true), n = cc.n;
+    const minS = new Float32Array(n + 1).fill(9), maxS = new Float32Array(n + 1), airN = new Int32Array(n + 1), keep = new Uint8Array(n + 1);
+    for (let i = 0; i < N; i++) {
+      const l = cc.lab[i];
+      if (!l) continue;
+      if (S[i] < minS[l]) minS[l] = S[i];
+      if (S[i] > maxS[l]) maxS[l] = S[i];
+      if (g[i] < airT) airN[l]++;
+    }
+    // keep patches that start at the surface; drop air-dark slivers along the outline, which are
+    // what a slightly-off fit leaves behind rather than decay
+    for (let l = 1; l <= n; l++) {
+      const airy = airN[l] > 0.6 * cc.area[l] || (airN[l] > 0.4 * cc.area[l] && maxS[l] < 0.6);
+      keep[l] = cc.area[l] >= 60 && minS[l] <= 0.6 && !airy ? 1 : 0;
+    }
+    const mask = new Uint8Array(N);
+    let area = 0;
+    for (let i = 0; i < N; i++) if (keep[cc.lab[i]]) { mask[i] = 1; area++; }
+    return { mask, area, bright, mE, mD, c, air };
+  }
+
   const api = { P, Z, init, analyseImage, analyseDrawing, warpColour, classify, get T() { return T; },
+    xray: { otsu, toothBlobs, fitBlob, autoFit, refineFit, fit: xrayFit, findDark },
     _internal: { inkMap, resizeArea, resizeLinear, edt, components, fillOutline, toothCandidates, register, warp, fitHomography, fitAffine, fitSimilarity } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CariesEngine = api;
@@ -1103,8 +1424,8 @@ const SAMPLES = [
   ['tester-1', 'Tester 1', 'unlabelled tester'], ['tester-2', 'Tester 2', 'unlabelled tester'], ['tester-3', 'Tester 3', 'unlabelled tester']];
 
 // ------------------------------------------------------------ canvases
-const cv = ['c-base', 'c-tint', 'c-paint', 'c-les'].map(id => { const c = $('#' + id); c.width = W * K; c.height = H * K; return c.getContext('2d'); });
-const [gBase, gTint, gPaint, gLes] = cv;
+const cv = ['c-base', 'c-tint', 'c-line', 'c-paint', 'c-les'].map(id => { const c = $('#' + id); c.width = W * K; c.height = H * K; return c.getContext('2d'); });
+const [gBase, gTint, gLine, gPaint, gLes] = cv;
 const off = document.createElement('canvas'); off.width = W; off.height = H;
 const goff = off.getContext('2d');
 function blit(g, imageData, smooth) {
@@ -1154,6 +1475,12 @@ function workerMain() {
   self.onmessage = (e) => {
     const m = e.data;
     if (m.type === 'init') { CariesEngine.init(m.tpl); self.postMessage({ type: 'ready' }); return; }
+    if (m.type === 'fit') {
+      let fit;
+      try { fit = CariesEngine.xray.fit(new Float32Array(m.buf), m.w, m.h, m.M0); } catch (err) { fit = null; }
+      self.postMessage({ type: 'result', id: m.id, fit });
+      return;
+    }
     let out;
     try { out = runAnalysis(CariesEngine, m.w, m.h, new Uint8ClampedArray(m.buf)); }
     catch (err) { out = { res: { ok: false, error: 'crash', message: String(err && err.message || err) } }; }
@@ -1188,6 +1515,17 @@ async function analysePixels(w, h, data) {
   return runAnalysis(E, w, h, data);
 }
 
+async function fitPixels(grey, w, h, M0) {
+  if (worker) {
+    try {
+      await workerReady;
+      return await new Promise((ok) => { const id = ++jobId; jobs.set(id, (d) => ok(d.fit || null)); worker.postMessage({ type: 'fit', id, w, h, buf: grey.buffer, M0 }, [grey.buffer]); });
+    } catch (e) { worker = null; }
+  }
+  await new Promise(r => setTimeout(r, 30));
+  return E.xray.fit(grey, w, h, M0);
+}
+
 // ------------------------------------------------------------ state + rendering
 const st = { mode: 'photo', photo: null, label: '', paint: new Uint8Array(N), undo: [], brush: 11, erase: false, drawRes: null, timer: 0 };
 function setBusy(on, text) { $('#busy').classList.toggle('on', on); if (text) $('#busytext').textContent = text; }
@@ -1201,11 +1539,14 @@ function bandOf(r) {
   return { i: 4, code: 'RC5', text: 'Inner third of dentin, close to the pulp' };
 }
 function whyOf(r) {
-  const S = r.depth;
-  if (r.pred === 'normal') return r.area ? 'Only specks of shading inside the outline, too little to call a lesion.' : 'No shading inside the tooth outline.';
-  if (r.pred === 'enamel') return S < .5 ? 'Shading stays in the outer half of the enamel.' : S < .9 ? 'Shading reaches the inner half of the enamel.' : 'Shading reaches the enamel–dentin junction without spreading into dentin.';
-  if (r.pred === 'dentin') return 'Shading crosses the enamel–dentin junction and stops ' + (S < 5 / 3 ? 'well short of the pulp.' : 'just short of the pulp.');
-  return S >= 2 ? 'Shading runs through dentin into the pulp chamber.' : 'Shading runs through dentin and touches the pulp outline.';
+  const S = r.depth, x = st.mode === 'xray', n = x ? 'The dark area' : 'Shading';
+  if (r.pred === 'normal') {
+    if (x) return r.area ? 'Only specks are marked inside the outline, too little to call a lesion.' : 'No dark area is marked inside the tooth outline.';
+    return r.area ? 'Only specks of shading inside the outline, too little to call a lesion.' : 'No shading inside the tooth outline.';
+  }
+  if (r.pred === 'enamel') return n + (S < .5 ? ' stays in the outer half of the enamel.' : S < .9 ? ' reaches the inner half of the enamel.' : ' reaches the enamel–dentin junction without spreading into dentin.');
+  if (r.pred === 'dentin') return n + ' crosses the enamel–dentin junction and stops ' + (S < 5 / 3 ? 'well short of the pulp.' : 'just short of the pulp.');
+  return n + (S >= 2 ? ' runs through dentin into the pulp chamber.' : ' runs through dentin and touches the pulp outline.');
 }
 function renderProbe(b, r) {
   const total = SEGS.reduce((a, s) => a + s.w, 0);
@@ -1260,8 +1601,11 @@ function renderLesion(grown, r) {
   }
 }
 function applyToggles() {
+  const les = $('#t-lesion').checked;
   $('#c-tint').style.display = $('#t-tissue').checked ? '' : 'none';
-  $('#c-les').style.display = $('#t-lesion').checked ? '' : 'none';
+  $('#c-les').style.display = les ? '' : 'none';
+  $('#c-paint').style.display = st.mode === 'xray' && !les ? 'none' : '';
+  $('#c-line').style.display = st.mode === 'xray' ? '' : 'none';
 }
 $('#t-tissue').onchange = applyToggles; $('#t-lesion').onchange = applyToggles;
 
@@ -1305,16 +1649,34 @@ function showPhoto(p) {
   renderLesion(p.grown, p.res);
   renderReading(p.res, p.label);
 }
-async function analyseBlob(blob, label) {
+// brightness of a small copy: diagram photos are mostly white paper, X-rays mostly dark
+function imageStats(src) {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0, 64, 64);
+  const d = g.getImageData(0, 0, 64, 64).data;
+  let sum = 0, dark = 0;
+  for (let i = 0; i < d.length; i += 4) { const v = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; sum += v; if (v < 80) dark++; }
+  return { mean: sum / 4096, dark: dark / 4096 };
+}
+const looksLikeXray = (s) => s.dark > 0.15 && s.mean < 150;
+const looksLikePaper = (s) => s.mean > 170 && s.dark < 0.08;
+async function readDiagram(src) {
+  const s = Math.min(1, 1800 / Math.max(src.width, src.height)), w = Math.round(src.width * s), h = Math.round(src.height * s);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(src, 0, 0, w, h);
+  return analysePixels(w, h, g.getImageData(0, 0, w, h).data);
+}
+async function analyseBlob(blob, label, route) {
   setBusy(true, 'Reading the photo…');
   try {
     let bmp;
     try { bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' }); } catch (e) { bmp = await createImageBitmap(blob); }
-    const s = Math.min(1, 1800 / Math.max(bmp.width, bmp.height)), w = Math.round(bmp.width * s), h = Math.round(bmp.height * s);
-    const c = document.createElement('canvas'); c.width = w; c.height = h;
-    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0, w, h);
-    const data = g.getImageData(0, 0, w, h).data;
-    const p = await analysePixels(w, h, data);
+    if (route && looksLikeXray(imageStats(bmp))) { // an X-ray picked in Diagram mode
+      setBusy(false); setMode('xray');
+      await xrLoad(blob, label + ' · opened as an X-ray');
+      return;
+    }
+    const p = await readDiagram(bmp);
     p.label = label;
     showPhoto(p);
     renderSteps(p);
@@ -1324,7 +1686,7 @@ async function analyseBlob(blob, label) {
 }
 function onFile(e) {
   const f = e.target.files && e.target.files[0];
-  if (f) { document.querySelectorAll('.thumb').forEach(t => t.setAttribute('aria-current', 'false')); analyseBlob(f, 'Your photo'); }
+  if (f) { document.querySelectorAll('.thumb').forEach(t => t.setAttribute('aria-current', 'false')); analyseBlob(f, 'Your photo', true); }
   e.target.value = '';
 }
 $('#f-cam').onchange = onFile; $('#f-pick').onchange = onFile;
@@ -1349,6 +1711,7 @@ $('#thumbs').onclick = (e) => { const b = e.target.closest('.thumb'); if (b) { i
 // ------------------------------------------------------------ draw mode
 function paintImage() { return maskImage(i => st.paint[i] ? [44, 34, 32, 235] : null); }
 function drawAnalyse() {
+  if (st.mode !== 'draw') return;
   const t0 = performance.now(), r = E.analyseDrawing(st.paint);
   r.ms = performance.now() - t0; r.quality = null;
   st.drawRes = r;
@@ -1367,18 +1730,20 @@ let drag = null;
 const stack = $('#stack');
 function toCanon(e) { const b = stack.getBoundingClientRect(); return [(e.clientX - b.left) * W / b.width, (e.clientY - b.top) * H / b.height]; }
 stack.addEventListener('pointerdown', (e) => {
+  if (st.mode === 'xray') { xrDown(e); return; }
   if (st.mode !== 'draw') return;
   e.preventDefault(); stack.setPointerCapture(e.pointerId);
   st.undo.push(st.paint.slice()); if (st.undo.length > 20) st.undo.shift();
   drag = toCanon(e); stamp(drag[0], drag[1], st.erase ? 0 : 1); scheduleDraw();
 });
 stack.addEventListener('pointermove', (e) => {
+  if (st.mode === 'xray') { xrMove(e); return; }
   if (!drag) return;
   const [x, y] = toCanon(e), d = Math.hypot(x - drag[0], y - drag[1]), n = Math.max(1, Math.ceil(d / (st.brush * .4)));
   for (let k = 1; k <= n; k++) stamp(drag[0] + (x - drag[0]) * k / n, drag[1] + (y - drag[1]) * k / n, st.erase ? 0 : 1);
   drag = [x, y]; scheduleDraw();
 });
-const endDrag = () => { if (drag) { drag = null; scheduleDraw(); } };
+const endDrag = (e) => { if (st.mode === 'xray') { xrUp(e); return; } if (drag) { drag = null; scheduleDraw(); } };
 stack.addEventListener('pointerup', endDrag); stack.addEventListener('pointercancel', endDrag);
 function redrawPaint() { blit(gPaint, paintImage()); }
 $('#b-shade').onclick = () => { st.erase = false; $('#b-shade').setAttribute('aria-pressed', 'true'); $('#b-erase').setAttribute('aria-pressed', 'false'); };
@@ -1403,10 +1768,17 @@ document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => {
 function setMode(m) {
   st.mode = m;
   $('#m-photo').setAttribute('aria-pressed', String(m === 'photo'));
+  $('#m-xray').setAttribute('aria-pressed', String(m === 'xray'));
   $('#m-draw').setAttribute('aria-pressed', String(m === 'draw'));
   $('#work').classList.toggle('drawmode', m === 'draw');
-  stack.classList.toggle('drawing', m === 'draw');
-  if (m === 'draw') {
+  $('#work').classList.toggle('xraymode', m === 'xray');
+  stack.classList.toggle('drawing', m !== 'photo');
+  stack.classList.toggle('moving', m === 'xray' && xr.tool === 'move');
+  if (m === 'xray') stack.tabIndex = 0; else stack.removeAttribute('tabindex');
+  $('#xhelp').hidden = !(m === 'xray' && xr.img);
+  applyToggles();
+  if (m === 'xray') { $('#inset').hidden = true; xrShow(); }
+  else if (m === 'draw') {
     $('#inset').hidden = true;
     $('#vlabel').textContent = 'Reference molar · shade a lesion';
     drawPaper(gBase, K, 4);
@@ -1415,9 +1787,329 @@ function setMode(m) {
   else { gPaint.clearRect(0, 0, W * K, H * K); gLes.clearRect(0, 0, W * K, H * K); drawPaper(gBase, K, 4, '#c7cdd3'); $('#vlabel').textContent = 'Take or choose a photo to begin'; }
 }
 $('#m-photo').onclick = () => setMode('photo');
+$('#m-xray').onclick = () => setMode('xray');
 $('#m-draw').onclick = () => setMode('draw');
 
-// ------------------------------------------------------------ printable PDF + capabilities
+// ------------------------------------------------------------ X-ray mode
+// The image sits under the fixed reference outline. Alignment is one affine map from image pixels to
+// the template frame, kept as move / size / turn / width (+ shear from auto-fit) so the sliders stay
+// meaningful. The marked lesion lives in image pixels, so it moves with the image when the fit changes.
+const XSAMPLES = [['xray-enamel', 'Enamel'], ['xray-dentin', 'Dentin'], ['xray-pulp', 'Pulp'], ['xray-sound', 'Sound']];
+const xr = {
+  img: null, iw: 0, ih: 0, mask: null, maskC: null, maskG: null, undo: [], label: '',
+  p: null, s0: 1, tool: 'move', brush: 9, sens: 6, auto: false, res: null, timer: 0, found: null,
+};
+function xrM() {
+  const { cx, cy, s, rot, asp, k, flip } = xr.p, co = Math.cos(rot), si = Math.sin(rot), f = flip ? -1 : 1;
+  const u00 = s * asp, u01 = s * k, u11 = s;
+  const a = co * u00 * f, b = co * u01 - si * u11, c = si * u00 * f, d = si * u01 + co * u11, hx = xr.iw / 2, hy = xr.ih / 2;
+  return [a, b, cx - a * hx - b * hy, c, d, cy - c * hx - d * hy];
+}
+function xrInv(M) {
+  const [a, b, e, c, d, f] = M, det = a * d - b * c;
+  return [d / det, -b / det, (b * f - d * e) / det, -c / det, a / det, (c * e - a * f) / det];
+}
+function xrSetFromM(M) { // inverse of xrM: affine (image -> template) to the slider parameters
+  let a = M[0], b = M[1], c = M[3], d = M[4];
+  const flip = a * d - b * c < 0;
+  if (flip) { a = -a; c = -c; }
+  const rot = Math.atan2(c, a), sx = Math.hypot(a, c), co = Math.cos(rot), si = Math.sin(rot);
+  const k1 = co * b + si * d, sy = -si * b + co * d, hx = xr.iw / 2, hy = xr.ih / 2;
+  xr.p = { cx: M[0] * hx + M[1] * hy + M[2], cy: M[3] * hx + M[4] * hy + M[5], s: sy, asp: sx / sy, k: k1 / sy, rot, flip };
+}
+function xrContain() {
+  xr.s0 = Math.min(W * 0.92 / xr.iw, H * 0.92 / xr.ih);
+  xr.p = { cx: W / 2, cy: H / 2, s: xr.s0, asp: 1, k: 0, rot: 0, flip: false };
+}
+const wrapDeg = (r) => { let d = r * 180 / Math.PI % 360; if (d > 180) d -= 360; if (d <= -180) d += 360; return d; };
+function xrSyncSliders() {
+  if (!xr.p) return;
+  $('#x-size').value = Math.log2(xr.p.s / xr.s0).toFixed(2);
+  $('#x-rot').value = wrapDeg(xr.p.rot).toFixed(1);
+  $('#x-width').value = Math.log2(xr.p.asp).toFixed(2);
+}
+function xrDrawOutline() {
+  gLine.clearRect(0, 0, W * K, H * K);
+  gLine.save(); gLine.scale(K, K); gLine.lineJoin = 'round'; gLine.lineCap = 'round';
+  for (const [col, lw] of [['rgba(0,0,0,.55)', 4.2], ['#5fe1ff', 2]]) {
+    gLine.strokeStyle = col; gLine.lineWidth = lw;
+    for (const [, d] of PATHS) gLine.stroke(new Path2D(d));
+  }
+  gLine.restore();
+}
+function xrRender() {
+  gBase.save(); gBase.setTransform(1, 0, 0, 1, 0, 0); gBase.fillStyle = '#000'; gBase.fillRect(0, 0, W * K, H * K); gBase.restore();
+  gPaint.clearRect(0, 0, W * K, H * K);
+  if (!xr.img) return;
+  const [a, b, e, c, d, f] = xrM();
+  for (const [g, src, alpha] of [[gBase, xr.img, 1], [gPaint, xr.maskC, .45]]) {
+    g.save(); g.setTransform(K * a, K * c, K * b, K * d, K * e, K * f);
+    g.globalAlpha = alpha; g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.drawImage(src, 0, 0); g.restore();
+  }
+}
+function xrRedrawMask() {
+  const id = new ImageData(xr.iw, xr.ih), dd = id.data, m = xr.mask;
+  for (let i = 0; i < m.length; i++) if (m[i]) { dd[4 * i] = 255; dd[4 * i + 1] = 59; dd[4 * i + 2] = 48; dd[4 * i + 3] = 255; }
+  xr.maskG.putImageData(id, 0, 0);
+}
+// image into the template frame: grey levels plus where the image covers the frame
+function xrFrame() {
+  const [a, b, e, c, d, f] = xrM();
+  goff.save(); goff.setTransform(1, 0, 0, 1, 0, 0); goff.clearRect(0, 0, W, H);
+  goff.setTransform(a, c, b, d, e, f); goff.imageSmoothingEnabled = true; goff.drawImage(xr.img, 0, 0); goff.restore();
+  const px = goff.getImageData(0, 0, W, H).data, g = new Float32Array(N), valid = new Uint8Array(N);
+  for (let i = 0; i < N; i++) {
+    g[i] = 0.299 * px[4 * i] + 0.587 * px[4 * i + 1] + 0.114 * px[4 * i + 2];
+    valid[i] = px[4 * i + 3] > 200 ? 1 : 0;
+  }
+  goff.clearRect(0, 0, W, H);
+  return { g, valid };
+}
+function xrMaskToTemplate() {
+  const Mi = xrInv(xrM()), out = new Uint8Array(N), { iw, ih, mask } = xr;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const u = Math.round(Mi[0] * x + Mi[1] * y + Mi[2]), v = Math.round(Mi[3] * x + Mi[4] * y + Mi[5]);
+    if (u >= 0 && v >= 0 && u < iw && v < ih && mask[v * iw + u]) out[y * W + x] = 1;
+  }
+  return out;
+}
+function xrMaskFromTemplate(tm) {
+  const M = xrM(), { iw, ih } = xr, m = new Uint8Array(iw * ih);
+  for (let y = 0; y < ih; y++) for (let x = 0; x < iw; x++) {
+    const u = Math.round(M[0] * x + M[1] * y + M[2]), v = Math.round(M[3] * x + M[4] * y + M[5]);
+    if (u >= 0 && v >= 0 && u < W && v < H && tm[v * W + u]) m[y * iw + x] = 1;
+  }
+  return m;
+}
+function xrFind(manual) {
+  if (!xr.img) return;
+  if (manual) { xr.undo.push(xr.mask.slice()); if (xr.undo.length > 20) xr.undo.shift(); }
+  const fr = xrFrame(), k = 0.62 - 0.05 * xr.sens, r = E.xray.findDark(fr.g, fr.valid, k);
+  xr.mask = r ? xrMaskFromTemplate(r.mask) : new Uint8Array(xr.iw * xr.ih);
+  xr.auto = true; xr.found = r;
+  xrRedrawMask(); xrRender(); xrClassify();
+  const note = $('#x-marknote');
+  if (!r) note.textContent = 'The image does not cover the crown of the outline. Line the tooth up first.';
+  else if (!r.area) note.textContent = 'No dark area found that opens onto the surface. Raise Sensitivity, or shade it with the brush.';
+  else note.textContent = 'Marked in red. Check it against the image and fix it with Shade or Erase.';
+}
+function xrClassify() {
+  if (!xr.img || st.mode !== 'xray') return;
+  const t0 = performance.now(), r = E.analyseDrawing(xrMaskToTemplate());
+  r.ms = performance.now() - t0; r.quality = null;
+  xr.res = r;
+  renderLesion(r.maps.grown, r);
+  renderReading(r, xr.label);
+}
+function xrChanged() {
+  xrRender(); xrSyncSliders();
+  clearTimeout(xr.timer);
+  xr.timer = setTimeout(() => { if (xr.auto) xrFind(false); else xrClassify(); }, xr.auto ? 220 : 90);
+}
+function xrIdle() {
+  xrDrawOutline(); xrRender(); gLes.clearRect(0, 0, W * K, H * K);
+  $('#vlabel').textContent = 'Choose an X-ray or tooth photo to begin';
+  renderReading({ ok: false, error: 'none' }, 'X-ray or tooth photo');
+  $('#cls').textContent = 'Ready';
+  $('#bandline').textContent = 'Choose an X-ray or a photo of a cut tooth.';
+  $('#rchip').innerHTML = '<span class="dot" style="color:#8d99a6"></span><span>No image yet</span>';
+}
+function xrShow() {
+  $('#xhelp').hidden = !xr.img;
+  if (!xr.img) { xrIdle(); return; }
+  $('#vlabel').textContent = xr.label;
+  xrDrawOutline(); xrRender(); xrSyncSliders(); xrClassify();
+}
+async function xrAutoFit(local) {
+  const sc = Math.min(1, 420 / Math.max(xr.iw, xr.ih)), w = Math.max(8, Math.round(xr.iw * sc)), h = Math.max(8, Math.round(xr.ih * sc));
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(xr.img, 0, 0, w, h);
+  const px = g.getImageData(0, 0, w, h).data, grey = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) grey[i] = 0.299 * px[4 * i] + 0.587 * px[4 * i + 1] + 0.114 * px[4 * i + 2];
+  const sx = w / xr.iw, sy = h / xr.ih, img = xr.img;
+  let M0 = null;
+  if (local) { const A = xrM(); M0 = [A[0] / sx, A[1] / sy, A[2], A[3] / sx, A[4] / sy, A[5], 0, 0, 1]; }
+  const fit = await fitPixels(grey, w, h, M0);
+  if (!fit) return { q: 0, ok: false };
+  if (fit.ok && xr.img === img) { const M = fit.M; xrSetFromM([M[0] * sx, M[1] * sy, M[2], M[3] * sx, M[4] * sy, M[5]]); }
+  return fit;
+}
+function xrFitNote({ q, ok }) {
+  $('#x-fitnote').textContent = !ok ? 'Could not line up a tooth. Drag and zoom so the crown sits roughly inside the outline, then press Auto-fit again.'
+    : q >= 0.85 ? `Lined up a tooth (outline overlap ${Math.round(q * 100)}%). Wrong tooth? Drag and zoom onto the one you want, then press Auto-fit again.`
+    : `Lined up roughly (outline overlap ${Math.round(q * 100)}%). Adjust it by hand, or drag and zoom onto the tooth you want and press Auto-fit again.`;
+}
+async function xrLoad(blob, label, route) {
+  setBusy(true, 'Lining up the tooth…');
+  try {
+    let bmp;
+    try { bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' }); } catch (e) { bmp = await createImageBitmap(blob); }
+    const s = Math.min(1, 1200 / Math.max(bmp.width, bmp.height)), iw = Math.max(1, Math.round(bmp.width * s)), ih = Math.max(1, Math.round(bmp.height * s));
+    const c = document.createElement('canvas'); c.width = iw; c.height = ih;
+    c.getContext('2d').drawImage(bmp, 0, 0, iw, ih);
+    const mc = document.createElement('canvas'); mc.width = iw; mc.height = ih;
+    Object.assign(xr, { img: c, iw, ih, mask: new Uint8Array(iw * ih), maskC: mc, maskG: mc.getContext('2d'), undo: [], label, auto: true, res: null });
+    xrContain();
+    await new Promise(r => setTimeout(r, 30));
+    const fit = await xrAutoFit();
+    if (route && !fit.ok && looksLikePaper(imageStats(c))) { // a photo of the printed diagram picked in X-ray mode
+      const p = await readDiagram(c);
+      if (p.res.ok && p.res.quality >= 0.6) {
+        p.label = label + ' · opened as a diagram photo';
+        xr.img = null; st.photo = p; setMode('photo'); renderSteps(p);
+        return;
+      }
+    }
+    xrFitNote(fit);
+    if (st.mode !== 'xray') setMode('xray');
+    $('#xhelp').hidden = false;
+    $('#vlabel').textContent = label;
+    xrDrawOutline(); xrSyncSliders();
+    if (fit.ok) xrFind(false);
+    else {
+      xr.auto = false; xrRender(); xrClassify();
+      $('#x-marknote').textContent = 'Line the tooth up first. Auto-fit looks for decay once the outline fits.';
+    }
+  } catch (e) {
+    xr.img = null; xrIdle();
+    $('#cls').textContent = 'Could not open this image';
+    $('#bandline').textContent = 'Try a JPEG or PNG photo.';
+  } finally { setBusy(false); }
+}
+function xrFile(e) {
+  const f = e.target.files && e.target.files[0];
+  if (f) { document.querySelectorAll('#xthumbs .thumb').forEach(t => t.setAttribute('aria-current', 'false')); xrLoad(f, 'Your image', true); }
+  e.target.value = '';
+}
+$('#x-cam').onchange = xrFile; $('#x-pick').onchange = xrFile;
+$('#xthumbs').innerHTML = XSAMPLES.map(([id, name]) => `<button class="thumb xthumb" data-id="${id}" aria-current="false"><img src="samples/${id}-thumb.jpg" alt="" loading="lazy"><b>${name}</b></button>`).join('');
+$('#xthumbs').onclick = async (e) => {
+  const b = e.target.closest('.thumb');
+  if (!b) return;
+  const smp = XSAMPLES.find(s => s[0] === b.dataset.id);
+  document.querySelectorAll('#xthumbs .thumb').forEach(t => t.setAttribute('aria-current', String(t === b)));
+  try {
+    const resp = await fetch(`samples/${smp[0]}.jpg`);
+    if (!resp.ok) throw new Error(resp.status);
+    await xrLoad(await resp.blob(), `Simulated X-ray · ${smp[1].toLowerCase()} lesion`.replace('sound lesion', 'no lesion'));
+  } catch (err) { $('#x-fitnote').textContent = 'The example image could not be loaded here.'; }
+};
+
+// alignment controls
+$('#x-size').oninput = (e) => { if (!xr.img) return; xr.p.s = xr.s0 * 2 ** +e.target.value; xrChanged(); };
+$('#x-rot').oninput = (e) => { if (!xr.img) return; xr.p.rot = +e.target.value * Math.PI / 180; xrChanged(); };
+$('#x-width').oninput = (e) => { if (!xr.img) return; xr.p.asp = 2 ** +e.target.value; xrChanged(); };
+$('#x-mirror').onclick = () => { if (!xr.img) return; xr.p.flip = !xr.p.flip; xrChanged(); };
+$('#x-reset').onclick = () => { if (!xr.img) return; xrContain(); $('#x-fitnote').textContent = ''; xrChanged(); };
+$('#x-fit').onclick = async () => {
+  if (!xr.img) return;
+  setBusy(true, 'Lining up the tooth…');
+  try {
+    const fit = await xrAutoFit(true);
+    xrFitNote(fit);
+    if (fit.ok && !xr.mask.some(v => v)) xr.auto = true; // nothing marked yet: look for decay once fitted
+    xrChanged();
+  } finally { setBusy(false); }
+};
+
+// marking controls
+function xrTool(t) {
+  xr.tool = t;
+  for (const id of ['move', 'shade', 'erase']) $('#x-' + id).setAttribute('aria-pressed', String(id === t));
+  stack.classList.toggle('moving', st.mode === 'xray' && t === 'move');
+  $('#xhelp').textContent = t === 'move' ? 'Drag to move · pinch or scroll to size' : t === 'shade' ? 'Shade over the decay' : 'Erase what is not decay';
+}
+$('#x-move').onclick = () => xrTool('move'); $('#x-shade').onclick = () => xrTool('shade'); $('#x-erase').onclick = () => xrTool('erase');
+$('#x-brush').oninput = (e) => { xr.brush = +e.target.value; };
+$('#x-sens').oninput = (e) => { xr.sens = +e.target.value; if (xr.img && xr.auto) { clearTimeout(xr.timer); xr.timer = setTimeout(() => xrFind(false), 150); } };
+$('#x-find').onclick = () => xrFind(true);
+$('#x-undo').onclick = () => { if (!xr.img || !xr.undo.length) return; xr.mask = xr.undo.pop(); xr.auto = false; xrRedrawMask(); xrRender(); xrClassify(); };
+$('#x-clear').onclick = () => {
+  if (!xr.img) return;
+  xr.undo.push(xr.mask.slice()); xr.mask = new Uint8Array(xr.iw * xr.ih); xr.auto = false;
+  xrRedrawMask(); xrRender(); xrClassify(); $('#x-marknote').textContent = 'Cleared. Shade the decay, or press Find dark areas.';
+};
+function xrStamp(tx, ty, val) {
+  const M = xrM(), Mi = xrInv(M), ix = Mi[0] * tx + Mi[1] * ty + Mi[2], iy = Mi[3] * tx + Mi[4] * ty + Mi[5];
+  const r = xr.brush / Math.sqrt(Math.abs(M[0] * M[4] - M[1] * M[3])), { iw, ih, mask } = xr;
+  const x0 = Math.max(0, Math.floor(ix - r)), x1 = Math.min(iw - 1, Math.ceil(ix + r)), y0 = Math.max(0, Math.floor(iy - r)), y1 = Math.min(ih - 1, Math.ceil(iy + r));
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if ((x - ix) ** 2 + (y - iy) ** 2 <= r * r) mask[y * iw + x] = val;
+  const g = xr.maskG;
+  g.save(); g.globalCompositeOperation = val ? 'source-over' : 'destination-out'; g.fillStyle = '#ff3b30';
+  g.beginPath(); g.arc(ix, iy, r, 0, 7); g.fill(); g.restore();
+}
+
+// pointer gestures: one finger moves or paints, two fingers pinch, turn and move
+const xp = new Map();
+let xg = null;
+function xrGestureStart() {
+  const pts = [...xp.values()];
+  xg = { p0: Object.assign({}, xr.p), pts: pts.map(p => p.slice()), paint: false };
+}
+function xrDown(e) {
+  if (!xr.img) return;
+  e.preventDefault(); stack.setPointerCapture(e.pointerId);
+  xp.set(e.pointerId, toCanon(e));
+  if (xp.size > 2) return;
+  if (xr.tool === 'move' || xp.size === 2) { xrGestureStart(); stack.classList.add('grabbing'); return; }
+  xr.undo.push(xr.mask.slice()); if (xr.undo.length > 20) xr.undo.shift();
+  xr.auto = false;
+  const p = xp.get(e.pointerId);
+  xg = { paint: true, last: p.slice() };
+  xrStamp(p[0], p[1], xr.tool === 'shade' ? 1 : 0); xrRender();
+}
+function xrMove(e) {
+  if (!xp.has(e.pointerId) || !xg) return;
+  const p = toCanon(e);
+  xp.set(e.pointerId, p);
+  if (xg.paint) {
+    const [lx, ly] = xg.last, d = Math.hypot(p[0] - lx, p[1] - ly), n = Math.max(1, Math.ceil(d / (xr.brush * .4)));
+    for (let k = 1; k <= n; k++) xrStamp(lx + (p[0] - lx) * k / n, ly + (p[1] - ly) * k / n, xr.tool === 'shade' ? 1 : 0);
+    xg.last = p; xrRender();
+    clearTimeout(xr.timer); xr.timer = setTimeout(xrClassify, 120);
+    return;
+  }
+  const pts = [...xp.values()], p0 = xg.p0;
+  if (pts.length === 1 || xg.pts.length === 1) {
+    const a = xg.pts[0], b = pts[0];
+    xr.p = Object.assign({}, p0, { cx: p0.cx + b[0] - a[0], cy: p0.cy + b[1] - a[1] });
+  } else {
+    const [a0, a1] = xg.pts, [b0, b1] = pts;
+    const m0 = [(a0[0] + a1[0]) / 2, (a0[1] + a1[1]) / 2], m1 = [(b0[0] + b1[0]) / 2, (b0[1] + b1[1]) / 2];
+    const v0 = [a1[0] - a0[0], a1[1] - a0[1]], v1 = [b1[0] - b0[0], b1[1] - b0[1]];
+    const f = Math.min(8, Math.max(1 / 8, Math.hypot(v1[0], v1[1]) / Math.max(Math.hypot(v0[0], v0[1]), 1)));
+    const dt = Math.atan2(v1[1], v1[0]) - Math.atan2(v0[1], v0[0]), co = Math.cos(dt), si = Math.sin(dt);
+    const rx = p0.cx - m0[0], ry = p0.cy - m0[1];
+    xr.p = Object.assign({}, p0, { cx: m1[0] + f * (co * rx - si * ry), cy: m1[1] + f * (si * rx + co * ry), s: p0.s * f, rot: p0.rot + dt });
+  }
+  xrChanged();
+}
+function xrUp(e) {
+  if (!xp.has(e.pointerId)) return;
+  xp.delete(e.pointerId);
+  stack.classList.remove('grabbing');
+  if (xg && xg.paint) { xg = null; xrClassify(); return; }
+  if (xp.size && xg) xrGestureStart(); else xg = null;
+}
+stack.addEventListener('wheel', (e) => {
+  if (st.mode !== 'xray' || !xr.img) return;
+  e.preventDefault();
+  const [px, py] = toCanon(e), f = Math.exp(-Math.max(-60, Math.min(60, e.deltaY)) * 0.004);
+  const s = Math.min(xr.s0 * 16, Math.max(xr.s0 / 8, xr.p.s * f)), g = s / xr.p.s;
+  xr.p.cx = px + g * (xr.p.cx - px); xr.p.cy = py + g * (xr.p.cy - py); xr.p.s = s;
+  xrChanged();
+}, { passive: false });
+stack.addEventListener('keydown', (e) => {
+  if (st.mode !== 'xray' || !xr.img) return;
+  const step = e.shiftKey ? 10 : 2, p = xr.p;
+  const act = { ArrowLeft: () => { p.cx -= step; }, ArrowRight: () => { p.cx += step; }, ArrowUp: () => { p.cy -= step; }, ArrowDown: () => { p.cy += step; },
+    '+': () => { p.s *= 1.03; }, '=': () => { p.s *= 1.03; }, '-': () => { p.s /= 1.03; }, '[': () => { p.rot -= Math.PI / 180; }, ']': () => { p.rot += Math.PI / 180; } }[e.key];
+  if (!act) return;
+  e.preventDefault(); act(); xrChanged();
+});
+
+// ------------------------------------------------------------ printable PDF + install
 function makePDF() {
   const pw = 595.28, ph = 841.89, sc = .74, ox = (pw - W * sc) / 2, oy = 118;
   const f = (v) => v.toFixed(2);
@@ -1446,35 +2138,26 @@ function makePDF() {
   pdf += 'trailer\n<< /Size ' + objs.length + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF';
   return new Blob([pdf], { type: 'application/pdf' });
 }
-function drawIcon() {
-  const c = document.createElement('canvas'); c.width = c.height = 256;
-  const g = c.getContext('2d');
-  g.fillStyle = '#0b141d'; g.beginPath(); if (g.roundRect) g.roundRect(0, 0, 256, 256, 56); else g.rect(0, 0, 256, 256); g.fill();
-  g.save(); g.translate(128 - W * .3, 30); g.scale(.3, .3);
-  g.fillStyle = '#fff'; g.strokeStyle = '#fff'; g.lineWidth = 10; g.lineJoin = 'round';
-  for (const [z, d] of PATHS) if (z !== 3) { const p = new Path2D(d); g.fill(p); g.stroke(p); }
-  g.fillStyle = '#f6b7c3'; for (const [z, d] of PATHS) if (z === 3) g.fill(new Path2D(d));
-  g.fillStyle = '#d7263d'; g.beginPath(); g.ellipse(250, 150, 46, 64, .2, 0, 7); g.fill();
-  g.restore();
-  return c.toDataURL('image/png');
-}
-if (window.claude && window.claude.use) {
-  window.claude.use('downloads').then((dl) => {
-    if (!dl) return;
-    const b = $('#dl'); b.hidden = false; $('#dlnote').textContent = '';
-    b.onclick = async () => {
-      try { await dl.save({ filename: 'caries-depth-diagram.pdf', data: makePDF() }); $('#dlnote').textContent = 'Saved.'; }
-      catch (e) { $('#dlnote').textContent = e && e.code === 'declined' ? 'Download cancelled.' : 'The PDF could not be saved in this view.'; }
-    };
-  }).catch(() => {});
-  window.claude.use('desktop').then(async (dt) => {
-    if (!dt) return;
-    if (dt.app && dt.app.dock) { dt.app.dock.setIcon(drawIcon()).catch(() => {}); return; }
-    if (dt.install && (await dt.install.state()) === 'available') {
-      const b = $('#install'); b.hidden = false;
-      b.onclick = () => dt.install.request().then((s) => { if (s === 'installed') b.hidden = true; }).catch(() => {});
-    }
-  }).catch(() => {});
+$('#dl').onclick = () => {
+  const url = URL.createObjectURL(makePDF()), a = document.createElement('a');
+  a.href = url; a.download = 'caries-depth-diagram.pdf';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  $('#dlnote').textContent = 'Downloaded caries-depth-diagram.pdf. Print it at 100%.';
+};
+
+// install as an app (browsers that support it) and keep working offline
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; $('#install').hidden = false; });
+window.addEventListener('appinstalled', () => { installEvt = null; $('#install').hidden = true; });
+$('#install').onclick = async () => {
+  if (!installEvt) return;
+  installEvt.prompt();
+  try { await installEvt.userChoice; } catch (e) {}
+  installEvt = null; $('#install').hidden = true;
+};
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 
 // ------------------------------------------------------------ start
