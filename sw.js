@@ -1,6 +1,6 @@
 // Offline support: the page itself is fetched network-first so updates show up straight away;
 // everything else (samples, icons, fonts) is served from the cache and refreshed in the background.
-const CACHE = 'caries-depth-v4';
+const CACHE = 'caries-depth-v5';
 const SAMPLES = ['dentin-middle', 'sound', 'enamel', 'dentin-deep', 'pulp', 'tester-1', 'tester-2', 'tester-3',
   'xray-enamel', 'xray-dentin', 'xray-pulp', 'xray-sound', 'opg', 'bitewing', 'premolar-dentin', 'incisor-dentin'];
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'css/app.css', 'js/templates.js', 'js/engine.js', 'js/analysis.js', 'js/worker.js', 'js/scan.js', 'js/app.js', 'js/xray.js', 'js/whole.js', 'js/upload.js', 'js/app-start.js', 'js/ai.js', 'icons/icon-192.png', 'icons/icon-512.png',

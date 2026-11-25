@@ -59,7 +59,7 @@
     if (aspect >= 1.65) return { type: 'panoramic', why: 'A wide image, as panoramic X-rays are.' };
     // two rows of crowns with a dark gap between them, bright above and below: a bite-wing
     const occ = biteLine(g, w, h, 'bitewing');
-    if (aspect >= 1.05 && occ && occ.strength > 0.16 && occ.cover > 0.55) return { type: 'bitewing', why: 'Upper and lower crowns facing each other across the bite.' };
+    if (aspect >= 1.05 && occ && occ.strength > 0.3 && occ.cover > 0.6) return { type: 'bitewing', why: 'Upper and lower crowns facing each other across the bite.' };
     return { type: 'periapical', why: 'One row of teeth with their roots.' };
   }
 

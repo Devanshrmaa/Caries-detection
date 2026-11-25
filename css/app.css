@@ -40,6 +40,7 @@ button,input,label.btn{font:inherit}
 .vbar{position:absolute;left:16px;right:16px;bottom:14px;display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap}
 .tog{display:inline-flex;align-items:center;gap:6px;color:#dbe4ec;font-size:14px;cursor:pointer;min-height:36px;padding:0 10px;border-radius:999px;background:#ffffff12}
 .tog input{position:absolute;opacity:0}
+.tog[hidden]{display:none}
 .tog span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:3px;border:1.5px solid #dbe4ec;margin-right:6px;vertical-align:-1px}
 .tog input:checked+span::before{background:#dbe4ec;box-shadow:inset 0 0 0 2px var(--film)}
 .rchip{display:inline-flex;align-items:center;gap:8px;color:#fff;font-weight:600;font-size:14px;background:#ffffff1c;border-radius:999px;padding:7px 12px;white-space:nowrap}
@@ -161,12 +162,6 @@ footer p+p{margin-top:6px}
 @media (max-width:760px){
 .grid{grid-template-columns:minmax(0,1fr);grid-template-areas:"viewer" "controls" "reading"}
 .wholeview .grid{grid-template-areas:"viewer" "reading" "controls"}
-.whole{height:min(58vh,460px)}
-.drop{grid-template-columns:minmax(0,1fr);text-align:center;justify-items:center;padding:22px 18px}
-.drop .btns{justify-content:center}
-.btn.big{flex:1 1 100%}
-.worktop{gap:10px}
-.tcell{width:30px;height:32px;font-size:12px}
 .viewer{margin:0 calc(-1*max(5vw,16px));border-radius:0;padding:44px 12px 58px}
 .stack{width:min(100%,calc(min(54vh,500px)*.6656))}
 .inset{display:none}
@@ -227,6 +222,8 @@ footer p+p{margin-top:6px}
 .tcell:focus-visible{outline:3px solid var(--enamel);outline-offset:2px}
 .chartkey{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;margin-top:2px}
 .chartkey i{display:inline-block;width:12px;height:12px;border-radius:4px;border:2px solid var(--tc);background:color-mix(in srgb,var(--tc) 26%,transparent);margin-right:-6px;vertical-align:-1px}
+.normal{--tc:var(--muted)}.enamel{--tc:var(--enamel)}.dentin{--tc:var(--dentin)}.pulp{--tc:var(--pulp)}.none{--tc:var(--line)}
+.checked .dot{color:var(--tc)}
 .checked{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:4px}
 .checked:empty{display:none}
 .linkish{border:0;background:none;color:var(--ink);font:inherit;font-size:14.5px;padding:6px 0;cursor:pointer;display:inline-flex;gap:8px;align-items:center;text-align:left}
@@ -266,3 +263,32 @@ details.panel[open]>summary::before{transform:rotate(45deg)}
 .edbox .row{margin-top:0}
 .edfoot{justify-content:space-between}
 .edbox .hint{margin-top:0}
+
+/* ---------------------------------------------------------------- phone layout for the parts above */
+@media (max-width:760px){
+.drop{grid-template-columns:minmax(0,1fr);text-align:center;justify-items:center;padding:20px 16px;gap:12px}
+.dropicon{width:44px;height:44px}
+.drop .btns{justify-content:center;width:100%}
+.btn.big{flex:1 1 100%}
+.worktop{gap:10px}
+#share{margin-left:0}
+.whole{height:min(56vh,440px)}
+.tcell{width:29px;height:32px;font-size:12px}
+.chartjaw{grid-template-columns:auto auto;row-gap:4px}
+.chartjaw>span{grid-column:1/-1;width:auto}
+.edview{height:min(52vh,420px)}
+.edfoot{flex-direction:column;align-items:stretch}
+}
+@media (max-width:420px){.tcell{width:27px;font-size:11.5px}.trow{gap:2px}}
+/* ---------------------------------------------------------------- learning library */
+.lib{margin-top:20px;display:grid;gap:10px;max-width:920px}
+.libitem{border:1px solid var(--line);border-radius:14px;padding:12px 18px}
+.libitem>summary{cursor:pointer;font-weight:650;font-size:17px;list-style:none;display:flex;align-items:center;gap:10px;min-height:32px}
+.libitem>summary::-webkit-details-marker{display:none}
+.libitem>summary::before{content:"";flex:none;width:9px;height:9px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.libitem[open]>summary::before{transform:rotate(45deg)}
+.libitem ul{margin:8px 0 6px;padding-left:20px}
+.libitem li{margin-top:8px;color:var(--muted)}
+.libitem li b{color:var(--ink);font-weight:650}
+.libitem summary:focus-visible{outline:3px solid var(--enamel);outline-offset:3px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){.libitem>summary::before,details.panel>summary::before{transition:none}}

@@ -50,7 +50,7 @@ async function wvLoad(src, label, type) {
       quality: { range: hi - lo, low: hi - lo < 70 },
       teeth: new Map(), ai: null, midAdj: 0, cropping: null });
     wv.metalC = metalCanvas(wv.met);
-    $('#w-mid').value = 0;
+    $('#w-mid').value = 0; $('#w-aitog').hidden = true;
     xr.ctx = null;
     st.xview = 'whole';
     if (st.mode !== 'xray') setMode('xray'); else { setXView('whole'); wvShow(); }
@@ -410,7 +410,7 @@ function wvCard() {
   for (const [, text] of (wv.pos && wv.pos.notes) || []) items.push(['Positioning', text, true]);
   if (wv.type === 'panoramic' && wv.pos && !wv.pos.notes.length) items.push(['Positioning looks right', 'The bite line curves up gently towards the back, as it should on a panoramic X-ray taken with the head level.', false]);
   if (wv.quality && wv.quality.low) items.push(['Low contrast', 'The image is grey and flat, so early decay can be missed. Try Adjust image, then Enhance contrast.', true]);
-  if (wv.type === 'panoramic') items.push(['Normal anatomy that can look like disease', 'The maxillary sinus over the upper back teeth, the mental foramen near the lower premolar roots, the mandibular canal, the tongue and soft palate, the hyoid bone, and the spine over the chin. See "Reading a panoramic X-ray" below.', false]);
+  if (wv.type === 'panoramic') items.push(['Normal anatomy that can look like disease', 'The maxillary sinus over the upper back teeth, the mental foramen near the lower premolar roots, the mandibular canal, the tongue and soft palate, the hyoid bone, and the spine over the chin. See "Normal anatomy that can look like disease" under Learn below.', false]);
   if (wv.type === 'bitewing') items.push(['Bite-wings show crowns, not root tips', 'They are the best X-ray for decay between back teeth and for the bone level between them; lesions at the root tips need a periapical X-ray.', false]);
   const esc = (t) => t.replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]);
   $('#w-findings').innerHTML = items.map(([t, d, w]) => `<li class="${w ? 'caution' : ''}"><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join('');
@@ -420,16 +420,15 @@ function wvCard() {
   if (pano) {
     const cell = (fdi) => {
       const t = wv.teeth.get(String(fdi));
-      const c = t && t.pred ? CLSCOL[t.pred] : '';
-      return `<button class="tcell${t ? ' done' : ''}" data-fdi="${fdi}" style="${c ? '--tc:' + c : ''}" aria-label="Tooth ${fdi}${t && t.pred ? ': ' + CLS[t.pred].name : ''}">${fdi}</button>`;
+      return `<button class="tcell${t ? ' done ' + (t.pred || 'none') : ''}" data-fdi="${fdi}" aria-label="Tooth ${fdi}${t && t.pred ? ': ' + CLS[t.pred].name : ''}">${fdi}</button>`;
     };
     const row = (list) => `<div class="trow">${list.map(cell).join('')}</div>`;
     $('#w-chart').innerHTML = `<div class="chartjaw"><span>Upper</span>${row([18, 17, 16, 15, 14, 13, 12, 11])}${row([21, 22, 23, 24, 25, 26, 27, 28])}</div>
       <div class="chartjaw"><span>Lower</span>${row([48, 47, 46, 45, 44, 43, 42, 41])}${row([31, 32, 33, 34, 35, 36, 37, 38])}</div>
-      <p class="hint chartkey"><i style="--tc:${CLSCOL.normal}"></i>sound <i style="--tc:${CLSCOL.enamel}"></i>enamel <i style="--tc:${CLSCOL.dentin}"></i>dentin <i style="--tc:${CLSCOL.pulp}"></i>pulp</p>`;
+      <p class="hint chartkey"><i class="normal"></i>sound <i class="enamel"></i>enamel <i class="dentin"></i>dentin <i class="pulp"></i>pulp</p>`;
   }
   const list = [...wv.teeth.values()];
-  $('#w-checked').innerHTML = list.map(t => `<li><button class="linkish" data-key="${t.key}"><span class="dot" style="color:${CLSCOL[t.pred] || '#8d99a6'}"></span>${t.fdi ? 'Tooth ' + t.fdi : (t.upper ? 'Upper' : 'Lower') + ' tooth'}: ${t.pred ? CLS[t.pred].name : 'not read'}${t.code ? ' · ' + t.code : ''}</button></li>`).join('');
+  $('#w-checked').innerHTML = list.map(t => `<li><button class="linkish" data-key="${t.key}"><span class="dot ${t.pred || 'none'}"></span>${t.fdi ? 'Tooth ' + t.fdi : (t.upper ? 'Upper' : 'Lower') + ' tooth'}: ${t.pred ? CLS[t.pred].name : 'not read'}${t.code ? ' · ' + t.code : ''}</button></li>`).join('');
 }
 $('#w-chart').onclick = (e) => {
   const b = e.target.closest('.tcell'); if (!b) return;

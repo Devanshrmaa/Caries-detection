@@ -1,69 +1,135 @@
 # Caries Depth Checker
 
-A website that reads how deep a caries lesion goes (sound, enamel, dentin or pulp, on the ICCMS RA1 to RC6 scale) from:
+A website that checks dental X-rays and tooth photos for decay and how deep it goes: sound, enamel, dentin or pulp, on the ICCMS RA1 to RC6 scale. It works on a phone or a computer, and the image never leaves the device unless you ask for the optional AI second opinion.
 
-- **Diagram**: a photo of the shaded molar diagram from the Caries depth dataset (normal, enamel, dentin and pulp folders).
-- **X-ray**: a dental radiograph or a photo of a tooth cut in half. You line the tooth up with the reference molar, the app marks dark (radiolucent) areas that open onto the tooth surface, and you can correct them with a brush.
-- **Draw**: shade a lesion on the reference molar yourself.
+It reads:
 
-Everything runs in the browser. Photos never leave the device, there is no server, and the site works offline once it has been opened.
+- **Panoramic X-rays (OPG).** Shows the bite line, metal fillings, crowns, root fillings and implants, and checks how the head was positioned. Tap a tooth to check it: it is numbered (FDI), cut out, turned crown-up if it is an upper tooth, and read. A tooth chart keeps the teeth checked.
+- **Bite-wing X-rays.** The same, for premolars and molars.
+- **Single-tooth X-rays** and **photos of a tooth cut in half.** A reference molar, premolar or front tooth is lined up with the tooth, dark (radiolucent) areas are marked and can be corrected with a brush, and the depth is read.
+- **The shaded molar diagram** from the Caries depth dataset (Diagram mode), and **Draw** mode for shading a lesion yourself.
 
-> A teaching aid, not a diagnostic device. X-ray mode maps a dark area onto one reference molar and has not been validated on labelled radiographs. Treatment decisions need a dentist's clinical examination.
+> A teaching aid, not a diagnostic device. The X-ray readings have only been tested on simulated images, not on labelled real radiographs (results below). Treatment decisions need a dentist's clinical examination.
+
+## Adding an image
+
+- **Take a photo** (opens the camera on a phone), **Choose a file**, drag an image onto the page, or paste one.
+- Installed as an app on Android, it appears in the phone's **Share** menu: share an X-ray from the gallery straight into it.
+- The image type is detected (diagram, panoramic, bite-wing, single tooth, cut-tooth photo) and can be changed.
+- **Adjust image** crops, turns, mirrors, inverts and boosts the contrast. That's useful for photos of an X-ray on a screen or light box.
+- **Share result** sends an annotated picture through the phone's share sheet, or downloads it.
+
+## What it checks
+
+On each tooth:
+- how deep the dark area goes;
+- which surface it is on (biting, side, neck), with what that means for how visible it is;
+- cervical burn-out;
+- fillings, crowns and root fillings, and dark areas against a filling (possible secondary decay);
+- dark areas at the root tips;
+- image quality: contrast, exposure, a tooth that had to be stretched to fit.
+
+On a whole panoramic or bite-wing image:
+- the bite line;
+- metal objects;
+- head positioning (from the curve and tilt of the bite line).
+
+The rules come from F. A. Pasler, *Color Atlas of Dental Medicine: Radiology* (Thieme). The page summarises them in its own words, with a **Learn** section on:
+- which X-ray shows what;
+- how panoramic X-rays distort;
+- positioning mistakes;
+- normal anatomy that looks like disease;
+- lesions and cysts at the root tips;
+- calcifications;
+- unusual teeth;
+- the sinus;
+- how to photograph an X-ray with a phone.
+
+### Optional AI second opinion
+
+The **AI second opinion** panel sends the image on screen to Claude (`claude-opus-5-5`) using the person's **own Anthropic API key**, and lists what it sees as numbered, boxed findings:
+- decay and its depth;
+- fillings, crowns, root fillings and implants;
+- bone loss;
+- lesions at the root tips;
+- impacted or missing teeth;
+- calculus;
+- anatomy that can look like disease.
+
+How it works:
+- **Request.** It uses the official Anthropic TypeScript SDK (1.8.0, bundled into `js/vendor/`, Apache-2.0) with structured output and the server-side refusal fallback (`fallbacks: "default"`). The SDK is loaded only when the button is pressed.
+- **Key.** The key goes straight from the browser to Anthropic; there is no server. It is kept in the browser's local storage only if "Remember the key" is ticked.
+- **Testing.** Tested against a mocked API (request shape, streamed answer, boxes drawn, rejected key), not against the live API.
 
 ## Run it
 
-It is a static site: `index.html` plus a few files. Serve the folder with any web server, for example:
+It is a static site with no build step. Serve the folder with any web server:
 
 ```sh
 python3 -m http.server 8000
 # open http://localhost:8000
 ```
 
-Opening `index.html` straight from disk mostly works, but the example images, the offline cache and "Install as app" need it served over `http://localhost` or `https://`.
+The background threads, the offline cache, "Install as app" and "Share to" need it served over `http://localhost` or `https://`. Opened straight from disk, it falls back to running everything on the page.
 
 ## Put it online
 
-Any static host works. With GitHub Pages: **Settings → Pages → Build and deployment → Deploy from a branch**, pick the branch and `/ (root)`, and the site appears at `https://<user>.github.io/<repo>/`. Netlify, Vercel and Cloudflare Pages also work with no build step.
+Any static host works. With GitHub Pages:
+1. In the repository, open **Settings → Pages → Build and deployment**.
+2. Choose **Deploy from a branch**, pick the branch and `/ (root)`.
+3. The site appears at `https://<user>.github.io/<repo>/`.
 
-## How it reads an image
+Netlify, Vercel and Cloudflare Pages also work with no build step. Camera, share-to and install need `https`, which these hosts provide.
 
-**Diagram photos.** The engine finds the dark tooth outline, registers it to the reference diagram (moments, silhouette ICP, outline ICP, then a perspective correction from the printed lines), separates the shading from the printed lines, and measures how deep the shading reaches. Each point inside the tooth has a depth index: 0 at the surface, 1 at the enamel–dentin junction, 2 at the pulp. Two thresholds were fitted to the labelled dataset. Shading past 1.29 counts as dentin caries, and shading that touches the pulp outline counts as pulp involvement. The original analysis reports all 77 unique labelled photos reading correctly (75/77 leave-one-out). The 5 labelled samples in this repo all read correctly.
+## How it works
 
-**X-rays and cut teeth.**
+**Diagram photos.**
+- The engine registers the photo to the reference diagram, separates the shading from the printed lines, and measures how deep the shading reaches.
+- Each point has a depth index: 0 at the surface, 1 at the enamel–dentin junction, 2 at the pulp.
+- Two thresholds were fitted to the labelled dataset: past 1.29 is dentin caries, and touching the pulp outline is pulp involvement.
+- The original analysis reports 77/77 labelled photos correct (75/77 leave-one-out). The 5 labelled samples in this repo all read correctly.
 
-1. *Auto-fit*: the image is cut at a few grey levels, since on a radiograph air < bone < dentin < enamel. The reference molar is then fitted to tooth-shaped blobs with silhouette ICP. It tries either way up and either way round, with upright and tilted starts. A tooth near the middle wins over one at the edge. When the image has been placed by hand, Auto-fit snaps to the tooth under that placement instead.
-2. *Find dark areas*: each point of the crown is compared with the sound enamel and dentin around it. Dark patches that open onto the tooth surface are kept. Air-dark slivers along the outline, which a slightly-off fit leaves behind, are dropped.
-3. *Read the depth*: the marked area goes through the same depth index and thresholds as the diagram.
+**Single-tooth X-rays.**
+- Three reference teeth (molar, premolar, front tooth) are fitted to tooth-shaped blobs by silhouette ICP. Auto mode tries all three in parallel on background threads, and you can place the tooth by hand and snap it.
+- Dark patches are found by comparing each point of the crown with the sound enamel and dentin around it. Air-dark slivers along the outline, burn-out at both sides of the neck, and metal are kept out.
+- The marked area is read with the same depth index and thresholds as the diagram.
 
-On simulated radiographs built from the reference molar (in `samples/xray-*.jpg`), all four examples read correctly. On 16 harder simulated variants (tilted, upside-down, small, noisy, low-contrast, with touching neighbours), 10 read correctly fully automatically. The other 6 had several teeth in view, and auto-fit picked a neighbour or asked for help. All 16 read correctly after a rough manual placement and Auto-fit. A real radiograph of a differently shaped tooth only fits the reference roughly, and overlapping teeth, fillings, cervical burn-out and pulp horns can look like decay. That is why the marked area can be edited.
+**Whole X-rays.**
+- **Bite line:** a smooth path through the dark gap between the crowns, found by dynamic programming.
+- **Metal:** flat, saturated white objects, sorted by position and shape.
+- **Tooth numbers:** the gaps between crowns along the arch, fitted to a table of average crown widths.
+- **A tapped tooth:** it is cut out along the bite line's slope and measured (the gaps either side, the biting edge). A crown outline is then snapped to it by the contrast across its edge: bright enamel inside, dark gap outside.
+- **Its decay search:** carries over the whole image's metal map, leaves out the neck band, and drops matched pairs of side patches (outline mismatch, not decay).
 
-### What the radiology atlas added
+## Test results (simulated images)
 
-The X-ray checks and the "Reading decay on a radiograph" section on the page are based on F. A. Pasler, *Color Atlas of Dental Medicine: Radiology* (Thieme). They draw on its chapters on bite-wing radiographs, radiographic anatomy of periapical films, errors in technique and processing, regressive changes, apical periodontitis, and filling materials. The page summarises these in its own words; no text or figures are copied. Once the outline is fitted, X-ray mode also reports:
+| Test | Result |
+|---|---|
+| Diagram samples (5 labelled + 3 testers) | 8/8 as expected |
+| Single-tooth X-rays: 4 examples + 7 premolar/front/molar cases + 9 atlas cases | all correct |
+| Harder single-tooth variants (tilted, small, noisy, upside-down, low contrast) | 10/16 automatic, 8/8 after a rough manual placement |
+| Panoramic: image type, bite line, metal objects (4 fillings/crowns, 1 root filling, 1 implant) | all found |
+| Panoramic: tooth numbers from a tap | 31/31 |
+| Panoramic: per-tooth reading | 23/31 (2 of 3 lesions found; the missed one is a tiny enamel lesion; 6 false alarms on 28 sound teeth) |
+| Bite-wing: teeth located and numbered by position | 8/8 |
+| Bite-wing: per-tooth reading | 2/8 (weak; check every marking) |
+| Phone and desktop: whole flow, editor, share, AI panel (mocked), offline | no errors, no sideways scrolling |
 
-- **Which surface the lesion is on**, with the atlas's point for each. *Occlusal*: fissure decay shows only late and is bigger than it looks. *Proximal*: bite-wings show it best. *Cervical*: check for burn-out.
-- **Cervical burn-out**: the neck of the tooth is covered by neither enamel nor bone, so it shows dark. When both sides of the neck are dark, they are reported as burn-out and left out of Find dark areas.
-- **Fillings, crowns and root fillings**: very bright (radiopaque) areas are kept out of the "sound tooth" brightness. A dark area against one is flagged as possible secondary decay.
-- **Root tips**: when they are in view, a dark halo around one is circled and flagged as *possible* apical periodontitis. The note carries the atlas's caveats: early inflammation shows nothing, anatomy can mimic a lesion, and no radiograph shows whether the pulp is alive.
-- **Image quality**: low-contrast, light (under-exposed) or dark (over-exposed) images, and a tooth that had to be stretched a lot to fit (a sign of a bent film or angled beam).
-
-These checks were tested on 9 simulated radiographs, and each was reported correctly:
-- burn-out on a sound tooth and next to enamel decay
-- proximal enamel and dentin lesions
-- a filling alone, and a filling with secondary decay
-- pulp decay with and without a root-tip lesion
-- a low-contrast image
-
-On the 16 harder variants they raised no false alarms. Where auto-fit failed, they wait until the tooth is lined up.
-
-If someone picks an X-ray in Diagram mode, it opens in X-ray mode. A photo of the printed diagram picked in X-ray mode opens in Diagram mode.
+The simulated images are built from the reference teeth themselves. Real radiographs are blurrier, noisier and more varied, so expect lower numbers on them.
 
 ## Files
 
 | Path | What it is |
 | --- | --- |
-| `index.html` | The whole app: page, styles, the detection engine (`#engine-js`, also run in a Web Worker) and the UI |
-| `samples/` | Dataset photos of the diagram, and simulated X-rays for X-ray mode |
-| `manifest.webmanifest`, `sw.js`, `icons/` | Install-as-app support and the offline cache |
+| `index.html` | The page |
+| `css/app.css` | Styles (light and dark) |
+| `js/engine.js` | Detection engine: diagram registration, template fitting, dark-area search, checks |
+| `js/templates.js` | Reference teeth: the dataset's molar, plus a premolar and a front tooth |
+| `js/scan.js` | Whole-image analysis: image type, bite line, metal, positioning, tooth numbering |
+| `js/app.js`, `js/xray.js`, `js/whole.js`, `js/upload.js`, `js/app-start.js` | The page's views and controls |
+| `js/ai.js`, `js/vendor/` | Optional AI second opinion and the bundled Anthropic SDK |
+| `js/worker.js`, `js/analysis.js` | Background threads |
+| `samples/` | Diagram photos from the dataset and simulated X-rays |
+| `manifest.webmanifest`, `sw.js`, `icons/` | Install as app, share target, offline cache |
 
-When you add or rename files in `samples/`, update the list in `sw.js` and bump `CACHE` there so returning visitors get the new files.
+When you add or rename files in `samples/` or `js/`, update the lists in `sw.js` and bump `CACHE` there, so returning visitors get the new files.

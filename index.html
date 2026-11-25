@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<meta name="description" content="Upload a photo of a shaded molar diagram, a dental X-ray or a cut tooth and read how deep the caries goes: enamel, dentin or pulp.">
+<meta name="description" content="Check dental X-rays (panoramic, bite-wing, single tooth) and tooth photos for decay and how deep it goes, on your phone or computer.">
 <meta name="theme-color" content="#0b141d">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
@@ -91,7 +91,7 @@
         <span class="togs" id="wholetogs" hidden>
           <label class="tog"><input type="checkbox" id="w-bite" checked><span>Bite line</span></label>
           <label class="tog"><input type="checkbox" id="w-metal" checked><span>Metal</span></label>
-          <label class="tog"><input type="checkbox" id="w-ai" checked><span>AI marks</span></label>
+          <label class="tog" id="w-aitog" hidden><input type="checkbox" id="w-ai" checked><span>AI marks</span></label>
         </span>
         <span class="rchip" id="rchip"><span class="dot"></span><span>Reading…</span></span>
       </div>
@@ -284,14 +284,16 @@
 
 <section class="band sect" id="xray">
   <div class="wrap">
-    <h2>Reading an X-ray or a cut tooth</h2>
-    <p class="sub">The same depth scale, applied to a real image. You line the tooth up with the reference molar; everything after that runs on your device.</p>
+    <h2>How it reads an X-ray</h2>
+    <p class="sub">Everything below runs on your device. The optional AI second opinion is the only part that sends anything anywhere, and only when you press its button.</p>
     <div class="xexplain">
-      <div class="step2"><h3>Fits the outline</h3><p>Auto-fit finds the brightest tooth-shaped blob near the middle of the image and fits the reference molar to its silhouette, in any rotation and either way round. You can move, size, turn and stretch it by hand.</p></div>
-      <div class="step2"><h3>Looks for dark areas</h3><p>Decay lets more X-rays through, so it shows darker than sound enamel and dentin. The app compares each point of the crown with the sound tissue around it and keeps dark patches that open onto the tooth surface.</p></div>
-      <div class="step2"><h3>Reads the depth</h3><p>The marked area is read with the same depth index and the same two thresholds fitted to your diagram dataset: past 29% of the way from the junction to the pulp is dentin, touching the pulp outline is pulp.</p></div>
+      <div class="step2"><h3>Works out what it is</h3><p>A white page with dark lines is the diagram; a colour photo is a cut tooth; a wide X-ray is panoramic; upper and lower crowns facing each other across a dark gap is a bite-wing; anything else is a single-tooth X-ray. You can change it.</p></div>
+      <div class="step2"><h3>Whole X-rays</h3><p>On panoramic and bite-wing images it finds the bite line between the jaws, metal fillings, crowns, root fillings and implants, and on panoramic images how the head was positioned. Tap a tooth: it is numbered from the spacing of the gaps between crowns, cut out, turned crown-up if it is an upper tooth, and measured.</p></div>
+      <div class="step2"><h3>One tooth</h3><p>A reference molar, premolar or front tooth is lined up with the tooth: by its silhouette on a single X-ray, by its crown's edges on a tooth cut from a whole X-ray. You can move, size, turn and stretch it by hand.</p></div>
+      <div class="step2"><h3>Looks for dark areas</h3><p>Decay lets more X-rays through, so it shows darker than sound enamel and dentin. Each point of the crown is compared with the sound tissue around it; dark patches that open onto the surface or a filling are kept, while gaps between teeth, burn-out and outline mismatches are left out.</p></div>
+      <div class="step2"><h3>Reads the depth</h3><p>The marked area is read with the depth index and the two thresholds fitted to your diagram dataset: past 29% of the way from the junction to the pulp is dentin, touching the pulp outline is pulp. Then the notes: which surface, fillings, burn-out, root tips, image quality.</p></div>
     </div>
-    <p class="sub xlimits">Limits: the reference is one molar, so a tooth with a different shape only fits roughly, and the depth reading is only as good as that fit. Overlapping teeth, tooth-coloured fillings and the pulp horns can still look like decay; burn-out and metal fillings are recognised, but not perfectly. The X-ray reading has not been checked against labelled radiographs.</p>
+    <p class="sub xlimits">Limits: the reference teeth are averages, so an unusual tooth only fits roughly, and the reading is only as good as that fit. On simulated test images, single-tooth X-rays read correctly; teeth cut from a simulated panoramic X-ray were numbered correctly 31 of 31 times and read correctly 23 of 31 times, and teeth cut from a simulated bite-wing were found 8 of 8 times but read correctly only 2 of 8 times. None of it has been checked against labelled real radiographs, so check the outline and the red area every time.</p>
   </div>
 </section>
 
@@ -308,6 +310,108 @@
       <div class="step2"><h3>Image quality</h3><p>The best radiograph has the most contrast. A grey or light film, from under-exposure or under-development, makes lesions look smaller and hides early ones; a dark, fogged film exaggerates burn-out. A bent film or a wrongly angled beam stretches or shortens the tooth.</p><p class="app">Low-contrast, light or dark images, and a tooth that had to be stretched a lot to fit, are flagged.</p></div>
     </div>
     <p class="sub xlimits">Summarised in our own words from F. A. Pasler, <cite>Color Atlas of Dental Medicine: Radiology</cite> (Thieme): the chapters on bite-wing radiographs, radiographic anatomy, errors in technique and processing, regressive changes, apical periodontitis and filling materials.</p>
+  </div>
+</section>
+
+<section class="band sect" id="learn">
+  <div class="wrap">
+    <h2>Learn to read dental X-rays</h2>
+    <p class="sub">Short notes on what each X-ray shows, what can fool you on a panoramic image, and what else turns up besides decay. Tap a topic to open it.</p>
+    <div class="lib">
+      <details class="libitem" open>
+        <summary>Which X-ray shows what</summary>
+        <ul>
+          <li><b>Bite-wing.</b> The X-ray for decay between back teeth: the beam passes straight through the contacts, so early lesions show. It also shows the edges of fillings and crowns, calculus, and the level of the bone between teeth. It does not show the root tips.</li>
+          <li><b>Periapical.</b> One or a few teeth from crown to root tip, with the bone around the tip. The X-ray for lesions at the root tips and for root canal work. Decay between teeth is easy to miss or underrate on it.</li>
+          <li><b>Panoramic (OPG).</b> All teeth, both jaws, the sinuses and the jaw joints in one low-dose image: the usual first X-ray for a new patient, and good for impacted or missing teeth, cysts and the bone level. Not reliable for early decay, and sizes vary across the image, so it is not for precise measuring.</li>
+          <li><b>Occlusal.</b> A view from above or below the jaw: for finding where something lies (an extra tooth, a salivary stone, the spread of a cyst).</li>
+          <li><b>3D imaging (CT).</b> When the third dimension matters: the exact position of an impacted tooth, a large cyst, the sinus.</li>
+        </ul>
+      </details>
+      <details class="libitem">
+        <summary>How a panoramic X-ray is made, and why it distorts</summary>
+        <ul>
+          <li>Only a curved slab of the face, a few millimetres thick and shaped like the dental arch, is sharp. Anything in front of it or behind it is blurred, and shown too narrow or too wide.</li>
+          <li>Front teeth that sit in front of the sharp layer look narrow and blurred; teeth behind it look wide and blurred.</li>
+          <li>Magnification is not the same everywhere, so measurements on a panoramic image are only approximate.</li>
+          <li>Structures outside the sharp layer, such as the other side of the jaw or the spine, are projected over the teeth and bone and can look like disease.</li>
+          <li>It is read in four regions: the teeth and the bone around them; the upper jaw with the nose and sinuses; the lower jaw; the jaw joints with the area behind the upper jaw and the neck.</li>
+        </ul>
+      </details>
+      <details class="libitem">
+        <summary>Positioning mistakes on panoramic X-rays</summary>
+        <ul>
+          <li><b>Chin tipped down.</b> The bite line curves up steeply like a big smile, the upper premolars overlap, and the jaw joints sit high. The app flags a deep curve.</li>
+          <li><b>Chin tipped up.</b> The bite line is flat or curves the wrong way, the hard palate lies across the roots of the upper teeth, and the jaw joints are pushed out to the sides. The app flags a flat curve.</li>
+          <li><b>Head turned or tilted.</b> Teeth on one side look wider than on the other, and left and right can no longer be compared. The app flags a bite line that climbs to one side.</li>
+          <li><b>Tongue not against the palate.</b> The air above the tongue shows as a dark band over the roots of the upper teeth, which can vanish in it.</li>
+          <li><b>Front teeth outside the sharp layer.</b> They come out blurred and too wide or too narrow.</li>
+          <li><b>Moving during the exposure.</b> Steps or waves in the lower border of the jaw.</li>
+          <li><b>Earrings, glasses, piercings, a lead apron.</b> Besides the real image, a blurred, enlarged ghost appears on the other side and higher up.</li>
+        </ul>
+      </details>
+      <details class="libitem">
+        <summary>Normal anatomy that can look like disease</summary>
+        <ul>
+          <li><b>Maxillary sinus.</b> A dark space above the upper back teeth. Its recesses and bony partitions can look like a cyst.</li>
+          <li><b>Mental foramen.</b> A round dark spot near the roots of the lower premolars that looks like a lesion at a root tip. An intact ligament space and lamina dura around the root tip argue against a lesion.</li>
+          <li><b>Mandibular canal.</b> A dark band edged by thin bright lines, running through the lower jaw below the roots.</li>
+          <li><b>Thin bone at the chin and under the molars.</b> Hollows on the inner side of the jaw let X-rays through and can be taken for cysts.</li>
+          <li><b>Soft tissue and air.</b> The tongue, soft palate, lips and cheeks add brightness; air in the throat and nose subtracts it. Neither means the bone is denser or thinner.</li>
+          <li><b>Things projected over the jaw.</b> The hyoid bone over the lower jaw, the spine over the chin, the styloid process, the coronoid process over the back of the upper jaw, the incisive canal between the upper central incisors.</li>
+          <li><b>At the tooth.</b> Cervical burn-out at the neck of the tooth, overlapping contacts between teeth, and the pulp horns can all look like decay.</li>
+        </ul>
+      </details>
+      <details class="libitem">
+        <summary>At the root tips: lesions and cysts</summary>
+        <ul>
+          <li><b>Apical periodontitis.</b> Often follows decay into the pulp. Early on the X-ray shows nothing; acute inflammation gives a diffuse dark area and a widened ligament space; a long-standing lesion has a sharp border, often with a bright rim of reactive bone.</li>
+          <li><b>Radicular cyst.</b> A round dark area with a bright, sharp border, the root tip of a dead tooth inside it, and neighbouring structures pushed aside. An infected cyst loses its sharp border. A small cyst cannot be told from a granuloma on an X-ray.</li>
+          <li><b>Residual cyst.</b> The same, where a tooth has been taken out.</li>
+          <li><b>Follicular cyst.</b> Around the crown of a tooth that has not come through.</li>
+          <li><b>Keratocyst.</b> Often with several chambers, most often near the angle of the lower jaw or the canines.</li>
+          <li>Some tumours, such as ameloblastoma, can look just like a cyst, so tissue removed from a cyst-like lesion is examined under the microscope.</li>
+        </ul>
+      </details>
+      <details class="libitem">
+        <summary>Bright spots that are not in the jaw</summary>
+        <ul>
+          <li><b>Calculus (tartar).</b> Small bright spurs on the sides of the teeth near the gum.</li>
+          <li><b>Salivary stones.</b> In the duct under the tongue they show near the angle of the jaw or over the premolar and molar roots, where they can pass for a root fragment.</li>
+          <li><b>Phleboliths and calcified lymph nodes.</b> Round, sometimes ringed, bright spots in the cheek or neck.</li>
+          <li><b>Ossified stylohyoid ligament.</b> A long thin bright line behind the jaw.</li>
+          <li>An X-ray is flat, so a second view at another angle is needed to tell whether a bright spot is in the bone or in the soft tissue in front of or behind it.</li>
+        </ul>
+      </details>
+      <details class="libitem">
+        <summary>Unusual teeth</summary>
+        <ul>
+          <li><b>Extra teeth.</b> A mesiodens between the upper central incisors; extra premolars or fourth molars.</li>
+          <li><b>Impacted teeth.</b> Third molars and canines most often; they can cause pain and cysts for years unnoticed.</li>
+          <li><b>Ankylosis.</b> A root fused to the bone, with no ligament space around it.</li>
+          <li><b>Shape.</b> Taurodontism (a tall pulp chamber, short roots), dens in dente, enamel pearls near the neck, hypercementosis (bulbous roots, often on dead teeth).</li>
+          <li><b>Inherited.</b> Amelogenesis imperfecta (thin or defective enamel); dentinogenesis imperfecta (bulbous crowns, short roots, pulps that disappear).</li>
+        </ul>
+      </details>
+      <details class="libitem">
+        <summary>Teeth and the sinus</summary>
+        <ul>
+          <li>Inflammation at the root tips or around the upper back teeth can spread to the floor of the sinus. Sinus disease from a tooth is usually on one side; from the nose, usually on both.</li>
+          <li>A panoramic X-ray shows only the lower part of the sinus well: a thickened lining or a dome-shaped retention cyst on its floor.</li>
+          <li>A panoramic X-ray taken with the chin up can make a healthy sinus look cloudy.</li>
+        </ul>
+      </details>
+      <details class="libitem">
+        <summary>Photographing an X-ray with your phone</summary>
+        <ul>
+          <li>The X-ray file itself is always better than a photo of it: ask the practice to send it, or save it from the viewer.</li>
+          <li>On a screen: turn the brightness up, turn the room lights down, and hold the phone straight on so the image is not a trapezium. Step back a little and zoom if you see wavy patterns.</li>
+          <li>On film: put it on a light box or a bright window, cover the light around the film, and avoid reflections.</li>
+          <li>No flash. Fill the frame with the X-ray, then use Adjust image to crop away the rest and boost the contrast.</li>
+        </ul>
+      </details>
+    </div>
+    <p class="sub xlimits">Summarised in our own words from F. A. Pasler, <cite>Color Atlas of Dental Medicine: Radiology</cite> (Thieme): examination strategies, panoramic technique and positioning, radiographic anatomy, anomalies, calcifications, inflammation of the jaws, the sinus, and cysts.</p>
   </div>
 </section>
 
@@ -365,7 +469,8 @@
 
 <footer class="band">
   <div class="wrap">
-    <p>A teaching aid. It does not diagnose real teeth: the X-ray mode maps a dark area onto a reference molar and has not been validated on radiographs. Treatment decisions need a dentist's clinical examination.</p>
+    <p>A teaching aid. It does not diagnose real teeth: the X-ray readings map a dark area onto a reference tooth and have not been validated on radiographs, and the AI second opinion can be wrong in both directions. Treatment decisions need a dentist's clinical examination.</p>
+    <p>Images stay on your device. The AI second opinion, if you use it, sends the image on screen to Anthropic with your own API key.</p>
     <p>Built from the Caries depth dataset: normal, enamel, dentin and pulp folders.</p>
   </div>
 </footer>

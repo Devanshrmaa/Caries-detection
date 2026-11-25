@@ -270,7 +270,7 @@ window.CDC = {
   },
   // show the boxes the AI drew on the image on screen
   aiShow(findings) {
-    if (st.mode === 'xray' && st.xview === 'whole' && wv.img) { wv.ai = findings; wvDraw(); }
+    if (st.mode === 'xray' && st.xview === 'whole' && wv.img) { wv.ai = findings; $('#w-aitog').hidden = !findings.length; wvDraw(); }
     else if (st.mode === 'xray' && xr.img) { xr.ai = findings; xrRender(); }
   },
   takeShared,
