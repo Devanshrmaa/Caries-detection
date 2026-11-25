@@ -848,12 +848,92 @@
   }
   // Entry point for the page. With M0 (the person's own placement, image -> template), snap to the
   // tooth under it first; a snap there is trusted at a lower overlap than a search of the whole image.
-  const FIT_OK = 0.75, FIT_LOCAL = 0.65, FIT_EDGE_Q = 0.58, FIT_EDGE_GAP = 5;
+  const FIT_OK = 0.75, FIT_LOCAL = 0.65, FIT_EDGE_Q = 0.58, FIT_EDGE_GAP = 5, FIT_LOCAL_GAP = 4.5, SNAP_OK = 0.12;
+  // Snap a crown outline onto the tooth, near a starting placement M0 (image -> template). For a tooth
+  // picked out of a whole X-ray: neighbours and bone merge with it, so silhouettes mislead. The crown's
+  // outline has bright enamel inside and a darker gap outside; the score is that contrast, measured
+  // across the outline at each point. Edges of the wrong kind (enamel over dentin, the pulp, the
+  // opposite jaw's crowns) have it the other way round and lower the score. Only small moves: a fifth
+  // of the crown sideways, sizes 0.85-1.15, turns up to 9 degrees.
+  function crownProfile(FM) {
+    if (FM.prof) return FM.prof;
+    const { W, H } = T, bm = boundaryMask(FM.sil, W, H);
+    if (FM.cut != null) for (let i = 0; i < bm.length; i++) if ((i / W | 0) >= FM.cut - 3) bm[i] = 0;
+    const P = pointsOf(bm, W, H, 360), sm = boxBlur(Float32Array.from(FM.sil), W, H, 7), nx = [], ny = [];
+    for (let k = 0; k < P.n; k++) {
+      const x = P.x[k], y = P.y[k], at = (xx, yy) => sm[Math.max(0, Math.min(H - 1, yy)) * W + Math.max(0, Math.min(W - 1, xx))];
+      let gx = at(x + 1, y) - at(x - 1, y), gy = at(x, y + 1) - at(x, y - 1), l = Math.hypot(gx, gy) || 1;
+      nx.push(-gx / l); ny.push(-gy / l); // outward: the silhouette falls off outwards
+    }
+    FM.prof = { P, nx, ny };
+    return FM.prof;
+  }
+  function snapCrown(g, w, h, M0, FM) {
+    const { P, nx, ny } = crownProfile(FM), box = FM.box, cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2, cw = box[2] - box[0];
+    const Mi0 = inv3(M0), d = 7; // template pixels either side of the outline
+    const lo = percentileSorted(Float64Array.from(g).sort(), 5), hi = percentileSorted(Float64Array.from(g).sort(), 95), rng = Math.max(hi - lo, 20);
+    const sample = (X, Y) => {
+      const ww = Mi0[6] * X + Mi0[7] * Y + Mi0[8], u = (Mi0[0] * X + Mi0[1] * Y + Mi0[2]) / ww, v = (Mi0[3] * X + Mi0[4] * Y + Mi0[5]) / ww;
+      if (u < 0 || v < 0 || u > w - 1 || v > h - 1) return null;
+      const x0 = u | 0, y0 = v | 0, x1 = Math.min(w - 1, x0 + 1), y1 = Math.min(h - 1, y0 + 1), a = u - x0, b = v - y0;
+      return (g[y0 * w + x0] * (1 - a) + g[y0 * w + x1] * a) * (1 - b) + (g[y1 * w + x0] * (1 - a) + g[y1 * w + x1] * a) * b;
+    };
+    const score = (q) => { // q = [tx, ty, scale, angle] moving the template outline around the crown's centre
+      const c = Math.cos(q[3]), s = Math.sin(q[3]);
+      let sum = 0;
+      for (let k = 0; k < P.n; k++) {
+        const dx = (P.x[k] - cx) * q[2], dy = (P.y[k] - cy) * q[2], X = cx + c * dx - s * dy + q[0], Y = cy + s * dx + c * dy + q[1];
+        const ox = c * nx[k] - s * ny[k], oy = s * nx[k] + c * ny[k];
+        const a = sample(X - d * ox, Y - d * oy), b = sample(X + d * ox, Y + d * oy);
+        if (a == null || b == null) continue;
+        sum += Math.max(-0.5, Math.min(0.5, (a - b) / rng)); // inside minus outside, capped
+      }
+      return sum / P.n;
+    };
+    // a mild pull back towards the tapped spot, so the search stays on the tooth that was picked
+    const prior = (q) => 1.5 * ((q[0] / cw) ** 2 + (q[1] / cw) ** 2) + 3 * Math.log(q[2]) ** 2;
+    const lim = [0.14 * cw, 0.12 * cw, [0.88, 1.14], 0.1];
+    const within = (t) => Math.abs(t[0]) <= lim[0] && Math.abs(t[1]) <= lim[1] && t[2] >= lim[2][0] && t[2] <= lim[2][1] && Math.abs(t[3]) <= lim[3];
+    const total = (t) => score(t) - prior(t);
+    const descend = (q, step, rounds) => {
+      let best = total(q);
+      for (let round = 0; round < rounds; round++) {
+        let moved = true;
+        while (moved) {
+          moved = false;
+          for (let k = 0; k < 4; k++) for (const sg of [1, -1]) {
+            const t = q.slice(); t[k] += sg * step[k];
+            if (!within(t)) continue;
+            const v = total(t);
+            if (v > best + 1e-6) { best = v; q = t; moved = true; }
+          }
+        }
+        for (let k = 0; k < 4; k++) step[k] /= 2;
+      }
+      return { q, best };
+    };
+    const start = score([0, 0, 1, 0]);
+    // several starting sizes and sideways shifts, a short search from each, then refine the best
+    let top = null;
+    for (const sc of [0.9, 1.0, 1.1]) for (const fx of [-0.08, 0, 0.08]) {
+      const r = descend([fx * cw, 0, sc, 0], [0.05 * cw, 0.05 * cw, 0.04, 0.04], 2);
+      if (!top || r.best > top.best) top = r;
+    }
+    const fin = descend(top.q, [0.02 * cw, 0.02 * cw, 0.015, 0.015], 4), q = fin.q, best = score(q);
+    // compose: the template outline was moved by A, so the new map is A after M0
+    const c = Math.cos(q[3]), s = Math.sin(q[3]), A = [c * q[2], -s * q[2], 0, s * q[2], c * q[2], 0, 0, 0, 1];
+    A[2] = cx + q[0] - (A[0] * cx + A[1] * cy); A[5] = cy + q[1] - (A[3] * cx + A[4] * cy);
+    return { M: mul3(A, M0), score: best, start };
+  }
   // opts.crownOnly: fit the crown only (bite-wings); opts.localOnly: never search the whole image
   // (a tooth picked out of a panoramic image must stay the tooth that was picked).
   function xrayFit(g, w, h, M0, opts) {
     opts = opts || {};
     const FM = shapeModel(!!opts.crownOnly);
+    if (opts.snap && M0) {
+      const r = snapCrown(g, w, h, M0, FM);
+      return { M: r.M, q: r.score, ok: r.score >= SNAP_OK, gap: 0, snap: true, start: r.start };
+    }
     let fit = M0 ? refineFit(g, w, h, M0, FM) : null;
     if (fit) fit.local = true;
     const ok = (f) => !!f && f.q >= (f.local ? FIT_LOCAL : FIT_OK);
@@ -862,7 +942,10 @@
     // Teeth that touch along their sides merge into one blob, which lowers the overlap of a correct
     // fit; a fit whose outline sits on the tooth's edges is accepted at a lower overlap.
     const gap = fit.sil ? edgeGap(fit.sil, w, h, fit.M, FM) : 60;
-    return { M: fit.M, q: fit.q, ok: ok(fit) || (fit.q >= FIT_EDGE_Q && gap <= FIT_EDGE_GAP), gap };
+    // A tooth picked out of a whole X-ray has neighbours (and bone) merged into its blob, so overlap
+    // says little there; its outline sitting on the tooth's edges is what counts.
+    const edgeOk = (fit.q >= FIT_EDGE_Q && gap <= FIT_EDGE_GAP) || (fit.local && opts.localOnly && gap <= FIT_LOCAL_GAP);
+    return { M: fit.M, q: fit.q, ok: ok(fit) || edgeOk, gap, edge: !ok(fit) && edgeOk };
   }
   // overlap of a fitted silhouette with the reference molar, ignoring anything more than 20 px
   // outside the outline (neighbouring teeth, bone), sampled on every second pixel
@@ -877,14 +960,17 @@
       sil[i] = 1; const x = i % W, y = (i / W) | 0;
       box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], y);
     }
-    T.crownModel = { sil, silNear: edt(boundaryMask(sil, W, H), W, H, true).near, m: moments(sil, W, H), box, near: dilate(sil, W, H, 41), crownOnly: true };
+    T.crownModel = { sil, silNear: edt(boundaryMask(sil, W, H), W, H, true).near, m: moments(sil, W, H), box, near: dilate(sil, W, H, 41), crownOnly: true, cut };
     return T.crownModel;
   }
   // How far the template's own outline lies from the tooth's edges in the image, in template pixels
   // (median). The overlap score only looks near the template, so a narrow template sitting inside a
   // wide tooth can score well; this catches it. Used to choose between reference teeth.
   function edgeGap(sil, w, h, M, FM) {
-    const tb = FM.bpts || (FM.bpts = pointsOf(boundaryMask(FM.sil, T.W, T.H), T.W, T.H, 600));
+    // the crown model's flat cut at the neck is not an edge of the tooth: leave it out
+    const bm = boundaryMask(FM.sil, T.W, T.H);
+    if (FM.cut != null) for (let i = 0; i < bm.length; i++) if ((i / T.W | 0) >= FM.cut - 3) bm[i] = 0;
+    const tb = FM.bpts || (FM.bpts = pointsOf(bm, T.W, T.H, 600));
     const dist = edt(boundaryMask(sil, w, h), w, h, false).dist, Mi = inv3(M);
     const s = Math.sqrt(Math.abs(M[0] * M[4] - M[1] * M[3])), ds = [];
     for (let k = 0; k < tb.n; k++) {
@@ -993,7 +1079,8 @@
   }
   // Grey levels of the crown in the template frame. Very bright patches (metal fillings, crowns,
   // root fillings) are radiopaque, so they are found first and kept out of the "sound tissue" levels.
-  function frameStats(g, valid) {
+  // metal: an outside mask in the template frame (from the whole X-ray it was cut from), if given
+  function frameStats(g, valid, metal, opts) {
     const { W, eff, outIdx } = T, N = g.length, { cervY, core } = xrayRefs();
     const en0 = [];
     for (let i = 0; i < N; i++) if (valid[i] && (i / W | 0) <= cervY && eff[i] === Z.EN) en0.push(g[i]);
@@ -1001,7 +1088,7 @@
     const e25 = percentileSorted(Float64Array.from(en0).sort(), 25);
     const restoT = Math.max(e25 + 40, Math.min(250, e25 + 0.6 * (255 - e25)));
     let resto = new Uint8Array(N);
-    for (let i = 0; i < N; i++) resto[i] = valid[i] && T.sil[i] && g[i] >= restoT ? 1 : 0;
+    for (let i = 0; i < N; i++) resto[i] = valid[i] && T.sil[i] && (metal ? metal[i] : g[i] >= restoT) ? 1 : 0;
     resto = opening(resto, T.W, T.H, 5);
     const cc = components(resto, T.W, T.H, true);
     let restoArea = 0, rootFill = 0;
@@ -1024,8 +1111,13 @@
     const c = Math.max(percentileSorted(all, 95) - percentileSorted(all, 5), 30);
     // On an X-ray the tooth is brighter than the air around the crown; on a photo of a cut tooth
     // it may be darker than the background. Only the first case can leave air inside the outline.
-    const air = O ? percentileSorted(O, 30) : 0, bright = !O || mIn >= median(O);
-    const airT = bright && O ? air + 0.3 * (mIn - air) : -1;
+    // On an X-ray the tooth is brighter than the gaps around it, whatever the neighbours do; only a photo
+    // of a cut tooth may be darker than its background. Next to bright neighbours (a crop from a whole
+    // X-ray) the gap is the darkest part of the ring around the tooth, so a lower percentile is used.
+    const xray = opts && opts.xray, air = O ? percentileSorted(O, opts && opts.crop ? 10 : 30) : 0, bright = xray || !O || mIn >= median(O);
+    // as dark as the gap: in a crop the real gap is near at hand, so the line sits closer to it (a decayed
+    // patch of enamel is darker than sound enamel, but not as dark as the gap)
+    const airT = bright && O ? air + (opts && opts.crop ? 0.15 : 0.3) * (mIn - air) : -1;
     return { mE, mD, mIn, c, air, bright, airT, resto, restoArea, rootFill, restoT };
   }
   const darkT = (st, k) => ({ tE: Math.max(st.mE, st.mD) - k * st.c - 0.5 * Math.max(st.mE - st.mD, 0), tD: st.mD - k * st.c });
@@ -1043,13 +1135,19 @@
   // Dark (radiolucent) areas in the crown that open onto the tooth surface or a filling.
   // g: grey image already in the template frame (W*H); valid: 1 where the image covers the frame;
   // k: how much darker than sound tissue counts, as a share of the crown's contrast range.
-  function findDark(g, valid, k) {
-    const { W, H, eff, S } = T, N = W * H, { cervY, neck } = xrayRefs(), st = frameStats(g, valid);
+  // opts.crop: a tooth cut from a whole X-ray. Its neck band is left out (the gaps between teeth and
+  // burn-out darken it on almost every panoramic or bite-wing image).
+  function findDark(g, valid, k, metal, opts) {
+    const { W, H, eff, S } = T, N = W * H, { cervY, neck, dIn, ch } = xrayRefs(), st = frameStats(g, valid, metal, opts);
     if (!st) return null;
-    const th = darkT(st, k), { resto, airT } = st;
+    // a crop is only roughly lined up, so it needs a clearer contrast before a patch counts
+    const th = darkT(st, opts && opts.crop ? k + 0.06 : k), { resto, airT } = st;
+    const yMax = opts && opts.crop ? cervY - 0.12 * ch : cervY + 10, fringe = Math.max(4, 0.035 * ch);
     let cand = new Uint8Array(N);
     for (let i = 0; i < N; i++) {
-      if (!valid[i] || resto[i] || (i / W | 0) > cervY + 10) continue;
+      if (!valid[i] || resto[i] || (i / W | 0) > yMax) continue;
+      // as dark as the gap between teeth, right at the outline: the outline is a little off, not decay
+      if (dIn[i] <= fringe && g[i] < airT) continue;
       if (eff[i] === Z.EN) cand[i] = g[i] < th.tE ? 1 : 0;
       else if (eff[i] === Z.DE) cand[i] = g[i] < th.tD ? 1 : 0;
     }
@@ -1057,7 +1155,7 @@
     const nearResto = st.restoArea ? dilate(resto, W, H, 9) : null;
     const cc = components(cand, W, H, true), n = cc.n;
     const minS = new Float32Array(n + 1).fill(9), maxS = new Float32Array(n + 1), airN = new Int32Array(n + 1),
-      neckN = new Int32Array(n + 1), byResto = new Uint8Array(n + 1), keep = new Uint8Array(n + 1);
+      neckN = new Int32Array(n + 1), byResto = new Uint8Array(n + 1), keep = new Uint8Array(n + 1), sx = new Float64Array(n + 1), maxIn = new Float32Array(n + 1);
     for (let i = 0; i < N; i++) {
       const l = cc.lab[i];
       if (!l) continue;
@@ -1065,6 +1163,8 @@
       if (S[i] > maxS[l]) maxS[l] = S[i];
       if (g[i] < airT) airN[l]++;
       if (neck[i]) neckN[l]++;
+      sx[l] += i % W;
+      if (dIn[i] > maxIn[l]) maxIn[l] = dIn[i];
       if (nearResto && nearResto[i]) byResto[l] = 1;
     }
     // Burn-out: the neck of the tooth, covered by neither enamel nor bone, shows dark on both sides.
@@ -1072,16 +1172,37 @@
     let dropped = 0, secondary = false;
     for (let l = 1; l <= n; l++) {
       // drop air-dark slivers along the outline, which a slightly-off fit leaves behind
-      const airy = airN[l] > 0.6 * cc.area[l] || (airN[l] > 0.4 * cc.area[l] && maxS[l] < 0.6);
+      // (a lesion that reaches well into dentin can be as dark as air: a cavity; keep those)
+      const crop = opts && opts.crop;
+      // in a crop, a gap-dark strip much longer than it reaches into the tooth is the gap beside it
+      const strip = crop && airN[l] > 0.5 * cc.area[l] && Math.max(cc.x1[l] - cc.x0[l], cc.y1[l] - cc.y0[l]) > 2.5 * maxIn[l];
+      const airy = strip || (airN[l] > (crop ? 0.3 : 0.6) * cc.area[l] && maxS[l] < 1.0) || (airN[l] > 0.4 * cc.area[l] && maxS[l] < 0.6);
       const atNeck = neckN[l] >= 0.6 * cc.area[l];
       keep[l] = cc.area[l] >= 60 && (minS[l] <= 0.6 || byResto[l]) && !airy ? 1 : 0;
       if (keep[l] && burnout && atNeck) { keep[l] = 0; dropped += cc.area[l]; }
       if (keep[l] && byResto[l]) secondary = true;
     }
+    // In a crop, a matched pair of surface patches on the two sides of the crown at the same height is
+    // the reference outline being a little narrower or wider than the tooth, not decay on both sides.
+    if (opts && opts.crop) {
+      const { midX, crownHW } = xrayRefs(), side = (l) => { const c = sx[l] / cc.area[l] - midX; return c < -0.3 * crownHW ? -1 : c > 0.3 * crownHW ? 1 : 0; };
+      const surf = []; for (let l = 1; l <= n; l++) if (keep[l] && !byResto[l] && minS[l] <= 0.3 && side(l)) surf.push(l);
+      for (const a of surf) for (const b of surf) {
+        if (a >= b || side(a) === side(b) || !keep[a] || !keep[b]) continue;
+        const ov = Math.min(cc.y1[a], cc.y1[b]) - Math.max(cc.y0[a], cc.y0[b]), span = Math.min(cc.y1[a] - cc.y0[a], cc.y1[b] - cc.y0[b]) + 1;
+        const ratio = Math.max(cc.area[a], cc.area[b]) / Math.max(1, Math.min(cc.area[a], cc.area[b]));
+        if (ov > 0.5 * span && ratio < 3.5) { keep[a] = keep[b] = 0; dropped += cc.area[a] + cc.area[b]; }
+      }
+    }
     const mask = new Uint8Array(N);
     let area = 0;
     for (let i = 0; i < N; i++) if (keep[cc.lab[i]]) { mask[i] = 1; area++; }
-    return { mask, area, bright: st.bright, mE: st.mE, mD: st.mD, c: st.c, air: st.air, burnout, burnoutArea: dropped, neck: [nl, nr], secondary };
+    const out = { mask, area, bright: st.bright, mE: st.mE, mD: st.mD, c: st.c, air: st.air, burnout, burnoutArea: dropped, neck: [nl, nr], secondary };
+    if (opts && opts.debug) { // each patch and why it was kept or dropped
+      out.th = th; out.airT = airT; out.comps = [];
+      for (let l = 1; l <= n; l++) out.comps.push({ l, area: cc.area[l], minS: +minS[l].toFixed(2), maxS: +maxS[l].toFixed(2), air: +(airN[l] / cc.area[l]).toFixed(2), neck: +(neckN[l] / cc.area[l]).toFixed(2), resto: byResto[l], keep: keep[l], box: [cc.x0[l], cc.y0[l], cc.x1[l], cc.y1[l]] });
+    }
+    return out;
   }
   // where a lesion sits on the crown: the occlusal surface, a proximal (side) surface or the neck
   function lesionSite(core) {
@@ -1129,8 +1250,8 @@
     return { range, lowContrast: range < 80, dark: st.bright && st.mE < 115, light: st.bright && st.air > 115 };
   }
   // Everything the page reports beside the depth: site, fillings, burn-out, root tips, image quality.
-  function inspect(g, valid, core, k) {
-    const st = frameStats(g, valid);
+  function inspect(g, valid, core, k, metal, opts) {
+    const st = frameStats(g, valid, metal, opts);
     if (!st) return null;
     const th = darkT(st, k), [nl, nr] = neckDark(g, valid, th);
     let secondary = false;

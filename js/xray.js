@@ -3,11 +3,12 @@
 // The image sits under the fixed reference outline. Alignment is one affine map from image pixels to
 // the template frame, kept as move / size / turn / width (+ shear from auto-fit) so the sliders stay
 // meaningful. The marked lesion lives in image pixels, so it moves with the image when the fit changes.
-const XSAMPLES = [['xray-enamel', 'Enamel'], ['xray-dentin', 'Dentin'], ['xray-pulp', 'Pulp'], ['xray-sound', 'Sound']];
 const xr = {
   img: null, iw: 0, ih: 0, mask: null, maskC: null, maskG: null, undo: [], label: '',
   p: null, s0: 1, tool: 'move', brush: 9, sens: 6, auto: false, aligned: false, res: null, timer: 0, found: null,
   tplPick: 'auto', tplUsed: 'molar', crownOnly: false, localOnly: false,
+  ctx: null, // set when the tooth was cropped from a whole X-ray: { key, fdi, upper, kind, x, y, type }
+  tplOnly: null, // the reference teeth Auto may choose from (bite-wings show no front teeth)
 };
 function xrM() {
   const { cx, cy, s, rot, asp, k, flip } = xr.p, co = Math.cos(rot), si = Math.sin(rot), f = flip ? -1 : 1;
@@ -57,6 +58,11 @@ function xrRender() {
     g.globalAlpha = alpha; g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
     g.drawImage(src, 0, 0); g.restore();
   }
+  if (xr.ai && xr.ai.length) { // boxes from the AI review, in image pixels
+    gPaint.save(); gPaint.setTransform(K * a, K * c, K * b, K * d, K * e, K * f);
+    drawAIBoxes(gPaint, xr.ai, xr.iw, xr.ih, 1 / (K * Math.sqrt(Math.abs(a * d - b * c))));
+    gPaint.restore();
+  }
 }
 function xrRedrawMask() {
   const id = new ImageData(xr.iw, xr.ih), dd = id.data, m = xr.mask;
@@ -74,7 +80,14 @@ function xrFrame() {
     valid[i] = px[4 * i + 3] > 200 ? 1 : 0;
   }
   goff.clearRect(0, 0, W, H);
-  return { g, valid };
+  let metal = null;
+  if (xr.metal) { // metal found on the whole X-ray, carried over with the crop
+    goff.save(); goff.setTransform(a, c, b, d, e, f); goff.imageSmoothingEnabled = false; goff.drawImage(xr.metal, 0, 0, xr.iw, xr.ih); goff.restore();
+    const mp = goff.getImageData(0, 0, W, H).data; metal = new Uint8Array(N);
+    for (let i = 0; i < N; i++) metal[i] = mp[4 * i + 3] > 100 ? 1 : 0;
+    goff.clearRect(0, 0, W, H);
+  }
+  return { g, valid, metal };
 }
 function xrMaskToTemplate() {
   const Mi = xrInv(xrM()), out = new Uint8Array(N), { iw, ih, mask } = xr;
@@ -95,7 +108,7 @@ function xrMaskFromTemplate(tm) {
 function xrFind(manual) {
   if (!xr.img) return;
   if (manual) { xr.undo.push(xr.mask.slice()); if (xr.undo.length > 20) xr.undo.shift(); }
-  const fr = xrFrame(), k = 0.62 - 0.05 * xr.sens, r = E.xray.findDark(fr.g, fr.valid, k);
+  const fr = xrFrame(), k = 0.62 - 0.05 * xr.sens, r = E.xray.findDark(fr.g, fr.valid, k, fr.metal, xrDarkOpts());
   xr.mask = r ? xrMaskFromTemplate(r.mask) : new Uint8Array(xr.iw * xr.ih);
   xr.auto = true; xr.found = r;
   xrRedrawMask(); xrRender(); xrClassify();
@@ -104,6 +117,8 @@ function xrFind(manual) {
   else if (!r.area) note.textContent = 'No dark area found that opens onto the surface. Raise Sensitivity, or shade it with the brush.';
   else note.textContent = 'Marked in red. Check it against the image and fix it with Shade or Erase.';
 }
+// what the detector should know about the image: cut from a whole X-ray, and whether it is an X-ray
+function xrDarkOpts() { return { crop: !!xr.ctx, xray: !!xr.ctx || xr.kind === 'xray' }; }
 function xrClassify() {
   if (!xr.img || st.mode !== 'xray') return;
   const t0 = performance.now(), r = E.analyseDrawing(xrMaskToTemplate());
@@ -112,6 +127,7 @@ function xrClassify() {
   renderLesion(r.maps.grown, r);
   renderReading(r, xr.label);
   renderFindings(xrFindings(r));
+  if (xr.ctx && typeof wvRecord === 'function') wvRecord(xr.ctx, r);
   // circle a root tip flagged as dark, so the note has something to point at
   for (const a of (xr.info && xr.info.apex) || []) if (a.covered && a.dark) {
     gLes.save(); gLes.setLineDash([12, 9]); gLes.lineWidth = 5; gLes.strokeStyle = '#fff'; gLes.beginPath(); gLes.arc(a.at[0] * K, a.at[1] * K, 34 * K, 0, 7); gLes.stroke();
@@ -129,7 +145,7 @@ function xrFindings(r) {
   xr.info = null;
   if (!xr.aligned) return [['Line the tooth up first', 'The checks for fillings, burn-out, root tips and image quality run once the outline sits on the tooth.', false]];
   const fr = xrFrame(), les = r.pred !== 'normal';
-  const info = E.xray.inspect(fr.g, fr.valid, les ? r.maps.core : null, 0.62 - 0.05 * xr.sens);
+  const info = E.xray.inspect(fr.g, fr.valid, les ? r.maps.core : null, 0.62 - 0.05 * xr.sens, fr.metal, xrDarkOpts());
   if (!info) return [];
   xr.info = info;
   const out = [], deep = r.pred === 'pulp' || (r.pred === 'dentin' && r.depth >= 5 / 3);
@@ -139,10 +155,12 @@ function xrFindings(r) {
   if (info.burnout) out.push(['Cervical burn-out', 'Both sides of the tooth neck look dark. The neck is covered by neither enamel nor bone, so X-rays pass easily and it shows dark on most radiographs. Find dark areas leaves it out.', false]);
   if (info.filling && !secondary) out.push(['Filling or crown seen', 'A very bright (radiopaque) area. Bite-wings also show whether its edges seal well or overhang.', false]);
   if (info.rootFilling) out.push(['Root canal filling seen', 'The tooth has had root canal treatment, so the pulp reading does not mean the same as for an untreated tooth.', false]);
-  const ap = info.apex.filter(a => a.covered);
+  const ap = xr.crownOnly ? [] : info.apex.filter(a => a.covered); // a crown-only fit cannot place the root tips
   if (ap.some(a => a.dark)) out.push(['Dark area at a root tip', 'Possible apical periodontitis, which often follows decay into the pulp; a sharp border with a bright rim suggests a long-standing lesion. A radiograph can only call it possible: anatomy such as the mental foramen can look the same (an intact ligament space around the tip argues against a lesion).', true]);
   else if (deep && ap.length) out.push(['Root tips', 'No dark area seen around the root tips. Early inflammation shows nothing on a radiograph, and no radiograph can show whether the pulp is alive.', false]);
+  else if (deep && xr.crownOnly && xr.ctx && xr.ctx.type === 'panoramic') out.push(['Look at the root tips', 'Only the crown is lined up here. Go back to the whole X-ray and look at the bone around this tooth\'s root tips: a dark halo there can mean apical periodontitis.', false]);
   else if (deep) out.push(['Root tips not in view', 'A periapical radiograph shows the root tips and the bone around them; a bite-wing does not.', false]);
+  if (xr.ctx && xr.ctx.type === 'panoramic' && (!les || r.pred === 'enamel')) out.push(['Panoramic X-rays miss early decay', 'Small lesions in enamel and between teeth are often not visible on a panoramic X-ray. A bite-wing is the X-ray for early decay between back teeth.', false]);
   const im = info.image, p = xr.p;
   if (im && im.lowContrast) out.push(['Low contrast', 'The image is grey and flat. Early lesions can be missed and lesions look smaller than they are.', true]);
   else if (im && im.light) out.push(['Image looks light', 'Under-exposed or under-developed: lesions look smaller than they are and early ones can be missed.', true]);
@@ -183,9 +201,10 @@ async function xrAutoFit(local) {
   const sx = w / xr.iw, sy = h / xr.ih, img = xr.img;
   let M0 = null;
   if (local) { const A = xrM(); M0 = [A[0] / sx, A[1] / sy, A[2], A[3] / sx, A[4] / sy, A[5], 0, 0, 1]; }
-  const opts = { crownOnly: !!xr.crownOnly, localOnly: !!xr.localOnly };
+  const opts = { crownOnly: !!xr.crownOnly, localOnly: !!xr.localOnly, snap: !!xr.localOnly && !!M0 };
   // "Auto" tries each reference tooth and keeps the one whose outline fits best
-  const names = xr.tplPick === 'auto' ? [tplName].concat(XTEETH.map(t => t[0]).filter(n => n !== tplName)) : [xr.tplPick];
+  const pool = xr.tplOnly || XTEETH.map(t => t[0]);
+  const names = xr.tplPick === 'auto' ? (pool.includes(tplName) ? [tplName] : []).concat(pool.filter(n => n !== tplName)) : [xr.tplPick];
   // a template whose outline sits well inside or outside the tooth's edges loses points; another
   // template has to beat the first one clearly to replace it
   const score = (f) => f.q * (1 - Math.min(0.5, (f.gap || 0) / 40));
@@ -226,26 +245,55 @@ async function xrPickTooth(t) {
   } finally { setBusy(false); }
 }
 $('#x-tooth').onclick = (e) => { const b = e.target.closest('button[data-t]'); if (b) xrPickTooth(b.dataset.t); };
-function xrFitNote({ q, ok }) {
-  $('#x-fitnote').textContent = !ok ? 'Could not line up a tooth. Drag and zoom so the crown sits roughly inside the outline, then press Auto-fit again.'
+function xrFitNote({ q, ok, edge, gap, snap }, placed) {
+  $('#x-fitnote').textContent = !ok && placed ? 'Could not snap the outline to the tooth, so it is placed where the tooth should be. Check it, and drag or size it if it is off.'
+    : ok && snap ? 'Snapped the crown outline to the tooth. Check it, and drag or size it if it is off.'
+    : ok && edge ? `Lined up the crown: its outline sits on the tooth's edges (within ${Math.max(1, Math.round(gap))} px). Check it, and adjust it if needed.`
+    : !ok ? 'Could not line up a tooth. Drag and zoom so the crown sits roughly inside the outline, then press Auto-fit again.'
     : q >= 0.85 ? `Lined up a tooth (outline overlap ${Math.round(q * 100)}%). Wrong tooth? Drag and zoom onto the one you want, then press Auto-fit again.`
     : `Lined up roughly (outline overlap ${Math.round(q * 100)}%). Adjust it by hand, or drag and zoom onto the tooth you want and press Auto-fit again.`;
 }
 async function xrLoad(blob, label, route) {
+  let bmp;
+  try {
+    try { bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' }); } catch (e) { bmp = await createImageBitmap(blob); }
+  } catch (e) {
+    xr.img = null; setMode('xray'); xrIdle();
+    $('#cls').textContent = 'Could not open this image';
+    $('#bandline').textContent = 'Try a JPEG or PNG photo.';
+    return;
+  }
+  return xrOpen(bmp, label, { route });
+}
+// Open an image (canvas or bitmap) in the one-tooth view.
+// opts.route: a diagram photo may be passed on to Diagram mode; opts.ctx: tooth cropped from a whole
+// X-ray; opts.place: starting placement {cx, cy, s, rot}; opts.tpl: reference tooth to use;
+// opts.crownOnly / opts.localOnly / opts.tplOnly: passed to the fit.
+async function xrOpen(src, label, opts) {
+  opts = opts || {};
   setBusy(true, 'Lining up the tooth…');
   try {
-    let bmp;
-    try { bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' }); } catch (e) { bmp = await createImageBitmap(blob); }
-    const s = Math.min(1, 1200 / Math.max(bmp.width, bmp.height)), iw = Math.max(1, Math.round(bmp.width * s)), ih = Math.max(1, Math.round(bmp.height * s));
+    const s = Math.min(1, 1200 / Math.max(src.width, src.height)), iw = Math.max(1, Math.round(src.width * s)), ih = Math.max(1, Math.round(src.height * s));
     const c = document.createElement('canvas'); c.width = iw; c.height = ih;
-    c.getContext('2d').drawImage(bmp, 0, 0, iw, ih);
+    c.getContext('2d').drawImage(src, 0, 0, iw, ih);
     const mc = document.createElement('canvas'); mc.width = iw; mc.height = ih;
-    Object.assign(xr, { img: c, iw, ih, mask: new Uint8Array(iw * ih), maskC: mc, maskG: mc.getContext('2d'), undo: [], label, auto: true, res: null });
+    Object.assign(xr, { img: c, iw, ih, mask: new Uint8Array(iw * ih), maskC: mc, maskG: mc.getContext('2d'), undo: [], label, auto: true, res: null,
+      ctx: opts.ctx || null, crownOnly: !!opts.crownOnly, localOnly: !!opts.localOnly, tplOnly: opts.tplOnly || null, ai: null, metal: opts.metal || null,
+      kind: opts.kind || (opts.ctx ? 'xray' : null) });
+    if (opts.tpl) { xr.tplPick = opts.tpl; useTemplate(opts.tpl); xr.tplUsed = opts.tpl; }
+    else if (opts.ctx) xr.tplPick = 'auto';
+    xrSyncTooth();
     xrContain();
+    // place.s is template pixels per pixel of the image passed in; the copy above is s times smaller
+    if (opts.place) xr.p = { cx: opts.place.cx, cy: opts.place.cy, s: opts.place.s / s, rot: opts.place.rot || 0, asp: 1, k: 0, flip: !!opts.place.flip };
+    st.xview = 'tooth';
+    if (st.mode !== 'xray') setMode('xray'); else setXView('tooth');
+    xrDrawOutline(); xrRender();
     await new Promise(r => setTimeout(r, 30));
-    const fit = await xrAutoFit();
-    xr.aligned = fit.ok;
-    if (route && !fit.ok && looksLikePaper(imageStats(c))) { // a photo of the printed diagram picked in X-ray mode
+    const fit = await xrAutoFit(!!opts.place);
+    // a tooth picked out of a whole X-ray keeps its starting placement if the fit fails: it is close
+    xr.aligned = fit.ok || !!opts.place;
+    if (opts.route && !fit.ok && looksLikePaper(imageStats(c))) { // a photo of the printed diagram
       const p = await readDiagram(c);
       if (p.res.ok && p.res.quality >= 0.6) {
         p.label = label + ' · opened as a diagram photo';
@@ -253,40 +301,23 @@ async function xrLoad(blob, label, route) {
         return;
       }
     }
-    xrFitNote(fit);
-    if (st.mode !== 'xray') setMode('xray');
+    xrFitNote(fit, !!opts.place);
     $('#xhelp').hidden = false;
     $('#vlabel').textContent = label;
     xrDrawOutline(); xrSyncSliders();
-    if (fit.ok) xrFind(false);
+    setXView('tooth');
+    if (xr.aligned) xrFind(false);
     else {
       xr.auto = false; xrRender(); xrClassify();
       $('#x-marknote').textContent = 'Line the tooth up first. Auto-fit looks for decay once the outline fits.';
     }
+    $('#share').hidden = false;
   } catch (e) {
     xr.img = null; xrIdle();
     $('#cls').textContent = 'Could not open this image';
     $('#bandline').textContent = 'Try a JPEG or PNG photo.';
   } finally { setBusy(false); }
 }
-function xrFile(e) {
-  const f = e.target.files && e.target.files[0];
-  if (f) { document.querySelectorAll('#xthumbs .thumb').forEach(t => t.setAttribute('aria-current', 'false')); xrLoad(f, 'Your image', true); }
-  e.target.value = '';
-}
-$('#x-cam').onchange = xrFile; $('#x-pick').onchange = xrFile;
-$('#xthumbs').innerHTML = XSAMPLES.map(([id, name]) => `<button class="thumb xthumb" data-id="${id}" aria-current="false"><img src="samples/${id}-thumb.jpg" alt="" loading="lazy"><b>${name}</b></button>`).join('');
-$('#xthumbs').onclick = async (e) => {
-  const b = e.target.closest('.thumb');
-  if (!b) return;
-  const smp = XSAMPLES.find(s => s[0] === b.dataset.id);
-  document.querySelectorAll('#xthumbs .thumb').forEach(t => t.setAttribute('aria-current', String(t === b)));
-  try {
-    const resp = await fetch(`samples/${smp[0]}.jpg`);
-    if (!resp.ok) throw new Error(resp.status);
-    await xrLoad(await resp.blob(), `Simulated X-ray · ${smp[1].toLowerCase()} lesion`.replace('sound lesion', 'no lesion'));
-  } catch (err) { $('#x-fitnote').textContent = 'The example image could not be loaded here.'; }
-};
 
 // alignment controls
 $('#x-size').oninput = (e) => { if (!xr.img) return; xr.p.s = xr.s0 * 2 ** +e.target.value; xrChanged(); };

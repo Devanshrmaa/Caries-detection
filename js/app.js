@@ -107,7 +107,7 @@ async function fitPixels(grey, w, h, M0, opts, tpl) {
 }
 
 // ------------------------------------------------------------ state + rendering
-const st = { mode: 'photo', photo: null, label: '', paint: new Uint8Array(N), undo: [], brush: 11, erase: false, drawRes: null, timer: 0 };
+const st = { mode: 'photo', xview: 'tooth', photo: null, label: '', paint: new Uint8Array(N), undo: [], brush: 11, erase: false, drawRes: null, timer: 0 };
 function setBusy(on, text) { $('#busy').classList.toggle('on', on); if (text) $('#busytext').textContent = text; }
 function bandOf(r) {
   if (!r || !r.ok || r.pred === 'normal') return null;
@@ -265,12 +265,6 @@ async function analyseBlob(blob, label, route) {
     showPhoto({ res: { ok: false, error: 'crash' }, label });
   } finally { setBusy(false); }
 }
-function onFile(e) {
-  const f = e.target.files && e.target.files[0];
-  if (f) { document.querySelectorAll('.thumb').forEach(t => t.setAttribute('aria-current', 'false')); analyseBlob(f, 'Your photo', true); }
-  e.target.value = '';
-}
-$('#f-cam').onchange = onFile; $('#f-pick').onchange = onFile;
 $('#thumbs').innerHTML = SAMPLES.map(([id, name]) => `<button class="thumb" data-id="${id}" aria-current="false"><img src="samples/${id}-thumb.jpg" alt="" loading="lazy"><b>${name}</b></button>`).join('');
 async function openSample(id) {
   const smp = SAMPLES.find(s => s[0] === id);
@@ -287,7 +281,12 @@ async function openSample(id) {
     $('#bandline').textContent = 'Take or choose a photo of the shaded diagram.';
   }
 }
-$('#thumbs').onclick = (e) => { const b = e.target.closest('.thumb'); if (b) { if (st.mode !== 'photo') setMode('photo'); openSample(b.dataset.id); } };
+$('#thumbs').onclick = (e) => { const b = e.target.closest('.thumb'); if (b) { if (st.mode !== 'photo') setMode('photo'); openSample(b.dataset.id); goWork(); } };
+// after picking an image, bring the result into view (on a phone the add area fills the screen)
+function goWork() {
+  const r = $('#work').getBoundingClientRect();
+  if (r.top > window.innerHeight * 0.5) $('#work').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+}
 
 // ------------------------------------------------------------ draw mode
 function paintImage() { return maskImage(i => st.paint[i] ? [44, 34, 32, 235] : null); }
@@ -346,9 +345,24 @@ document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => {
   st.paint = p; redrawPaint(); drawAnalyse();
 });
 
+// X-ray mode has two views: the whole image (panoramic, bite-wing) and one tooth
+function setXView(v) {
+  st.xview = v;
+  const whole = st.mode === 'xray' && v === 'whole';
+  $('#work').classList.toggle('wholeview', whole);
+  $('#whole').hidden = !whole; $('#stack').hidden = whole;
+  $('#wholecard').hidden = !whole; $('#toothcard').hidden = whole;
+  $('#wholetogs').hidden = !whole; $('#toothtogs').hidden = whole;
+  $('#backrow').hidden = !(st.mode === 'xray' && v === 'tooth' && xr.ctx);
+  if (xr.ctx) { $('#w-fdi').closest('.fdisel').hidden = !xr.ctx.fdi; if (xr.ctx.fdi) $('#w-fdi').value = xr.ctx.fdi; }
+  $('#adjustrow').hidden = st.mode !== 'xray';
+}
 function setMode(m) {
   st.mode = m;
   useTemplate(m === 'xray' ? (xr.tplUsed || 'molar') : 'molar'); // diagrams and drawing always use the molar
+  setXView(m === 'xray' ? st.xview : 'tooth');
+  $('#typesel').hidden = m !== 'xray';
+  $('#share').hidden = m === 'draw' ? false : !(m === 'photo' ? st.photo : (xr.img || wv.img));
   $('#m-photo').setAttribute('aria-pressed', String(m === 'photo'));
   $('#m-xray').setAttribute('aria-pressed', String(m === 'xray'));
   $('#m-draw').setAttribute('aria-pressed', String(m === 'draw'));
@@ -359,7 +373,8 @@ function setMode(m) {
   if (m === 'xray') stack.tabIndex = 0; else stack.removeAttribute('tabindex');
   $('#xhelp').hidden = !(m === 'xray' && xr.img);
   applyToggles();
-  if (m === 'xray') { $('#inset').hidden = true; xrShow(); }
+  if (m === 'xray' && st.xview === 'whole') { $('#inset').hidden = true; wvShow(); }
+  else if (m === 'xray') { $('#inset').hidden = true; xrShow(); }
   else if (m === 'draw') {
     $('#inset').hidden = true;
     $('#vlabel').textContent = 'Reference molar · shade a lesion';

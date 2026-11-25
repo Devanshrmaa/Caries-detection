@@ -19,22 +19,58 @@
   <div class="wrap">
     <div>
       <h1>Caries Depth Checker</h1>
-      <p class="lede">Upload a photo of the shaded molar diagram, a dental X-ray or a cut tooth, or shade one here. The app lines it up with the reference molar and reads how deep the lesion goes.</p>
+      <p class="lede">Check dental X-rays and tooth photos for decay and how deep it goes. Panoramic (OPG), bite-wing and single-tooth X-rays, photos of a cut tooth, and the shaded molar diagram. It all runs on your device.</p>
     </div>
-    <div class="modes">
-      <div class="seg" role="group" aria-label="Mode">
+    <button class="ghost" id="install" hidden>Install as app</button>
+  </div>
+</header>
+
+<section class="band add" id="add" aria-label="Add an image">
+  <div class="wrap">
+    <div class="drop" id="drop">
+      <svg class="dropicon" viewBox="0 0 48 48" aria-hidden="true"><path d="M8 34V14a4 4 0 0 1 4-4h6l3-4h6l3 4h6a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><circle cx="24" cy="23" r="7.5" fill="none" stroke="currentColor" stroke-width="2.4"/></svg>
+      <div class="droptext">
+        <h2>Add an X-ray or tooth photo</h2>
+        <p>Use the X-ray file if you have it. A photo of an X-ray on a screen or light box works too: hold the phone straight on, fill the frame, avoid glare.</p>
+      </div>
+      <div class="btns">
+        <label class="btn big">Take a photo<input type="file" id="u-cam" accept="image/*" capture="environment"></label>
+        <label class="btn big alt">Choose a file<input type="file" id="u-pick" accept="image/*"></label>
+      </div>
+      <p class="hint droppaste">or drag an image here, or paste it</p>
+    </div>
+    <div class="examples">
+      <p class="hint">Or try an example X-ray (simulated):</p>
+      <div class="thumbs" id="xthumbs"></div>
+      <p class="hint">Or one of your diagram photos:</p>
+      <div class="thumbs" id="thumbs"></div>
+    </div>
+  </div>
+</section>
+
+<main class="band work" id="work">
+  <div class="wrap">
+    <div class="worktop">
+      <div class="seg" role="group" aria-label="What you are reading">
         <button id="m-photo" aria-pressed="true">Diagram</button>
         <button id="m-xray" aria-pressed="false">X-ray</button>
         <button id="m-draw" aria-pressed="false">Draw</button>
       </div>
-      <button class="ghost" id="install" hidden>Install as app</button>
+      <label class="typesel" id="typesel">Image type
+        <select id="x-type">
+          <option value="auto">Detect</option>
+          <option value="panoramic">Panoramic (OPG)</option>
+          <option value="bitewing">Bite-wing</option>
+          <option value="periapical">Single tooth X-ray</option>
+          <option value="photo">Photo of a cut tooth</option>
+        </select>
+      </label>
+      <button class="ghost" id="share" hidden>Share result</button>
     </div>
+    <p class="typenote hint" id="typenote" aria-live="polite"></p>
   </div>
-</header>
-
-<main class="band work" id="work">
   <div class="wrap grid">
-    <section class="viewer" aria-label="Tooth viewer">
+    <section class="viewer" aria-label="Image viewer">
       <p class="vlabel" id="vlabel">Loading…</p>
       <canvas class="inset" id="inset" width="152" height="200" hidden></canvas>
       <div class="stack" id="stack">
@@ -44,10 +80,18 @@
         <canvas id="c-paint"></canvas>
         <canvas id="c-les"></canvas>
       </div>
+      <div class="whole" id="whole" hidden>
+        <canvas id="wcanvas"></canvas>
+      </div>
       <div class="vbar">
-        <span>
+        <span class="togs" id="toothtogs">
           <label class="tog"><input type="checkbox" id="t-tissue" checked><span>Tissues</span></label>
           <label class="tog"><input type="checkbox" id="t-lesion" checked><span>Lesion</span></label>
+        </span>
+        <span class="togs" id="wholetogs" hidden>
+          <label class="tog"><input type="checkbox" id="w-bite" checked><span>Bite line</span></label>
+          <label class="tog"><input type="checkbox" id="w-metal" checked><span>Metal</span></label>
+          <label class="tog"><input type="checkbox" id="w-ai" checked><span>AI marks</span></label>
         </span>
         <span class="rchip" id="rchip"><span class="dot"></span><span>Reading…</span></span>
       </div>
@@ -55,7 +99,11 @@
       <div class="busy" id="busy"><div><div class="ring"></div><span id="busytext">Reading the photo…</span></div></div>
     </section>
 
-    <section class="reading card" aria-live="polite">
+    <section class="reading card" id="toothcard" aria-live="polite">
+      <div class="backrow" id="backrow" hidden>
+        <button class="chip" id="w-back">← Whole X-ray</button>
+        <label class="fdisel">Tooth <select id="w-fdi"></select></label>
+      </div>
       <p class="src" id="src">&nbsp;</p>
       <div class="cls"><span class="dot" id="clsdot"></span><h2 id="cls">Reading…</h2></div>
       <p class="bandline" id="bandline">&nbsp;</p>
@@ -65,33 +113,44 @@
       <p class="why" id="why"></p>
       <ul class="findings" id="findings" aria-label="Other findings"></ul>
       <p class="warn" id="warn"></p>
-      <p class="xnote" id="xnote">X-ray reading is an estimate made on the reference molar. Decay usually reaches further than a radiograph shows, and decay on the cheek or tongue side of a tooth rarely shows at all. Check that the outline fits and that the red area is the decay; it is not a diagnosis.</p>
+      <p class="xnote" id="xnote">X-ray reading is an estimate made on a reference tooth. Decay usually reaches further than a radiograph shows, and decay on the cheek or tongue side of a tooth rarely shows at all. Check that the outline fits and that the red area is the decay; it is not a diagnosis.</p>
       <div class="mg"><h3>Usual management</h3><p id="mgmt"></p></div>
       <p class="meta" id="meta"></p>
     </section>
 
+    <section class="reading card" id="wholecard" aria-live="polite" hidden>
+      <p class="src" id="w-src">&nbsp;</p>
+      <h2 id="w-title">Whole X-ray</h2>
+      <p class="bandline" id="w-lead">Tap a tooth on the image to check it for decay.</p>
+      <ul class="findings" id="w-findings" aria-label="Findings on the whole image"></ul>
+      <h3 class="charth">Teeth checked</h3>
+      <div class="chart" id="w-chart" aria-label="Tooth chart"></div>
+      <ul class="checked" id="w-checked"></ul>
+      <p class="xnote">Teeth are numbered with the FDI system: 1 and 2 are the upper right and left, 3 and 4 the lower left and right, counted from the middle. On a panoramic X-ray the patient's right is on your left. The numbers are estimates; change one in the tooth view if it is wrong.</p>
+    </section>
+
     <section class="controls">
       <div class="photoctl">
-        <div class="btns">
-          <label class="btn">Take a photo<input type="file" id="f-cam" accept="image/*" capture="environment"></label>
-          <label class="btn alt">Choose a photo<input type="file" id="f-pick" accept="image/*"></label>
-        </div>
-        <p class="hint">Photograph the printed molar diagram after shading it. Or open one of your own dataset photos:</p>
-        <div class="thumbs" id="thumbs"></div>
+        <p class="hint" style="margin-top:0">Photograph the printed molar diagram after shading it, or pick one of your dataset photos above. The reading appears on the right.</p>
+      </div>
+      <div class="wholectl" id="wholectl">
+        <ol class="xsteps">
+          <li>
+            <h3><span class="num">1</span>Tap a tooth to check it</h3>
+            <p class="hint">The app crops that tooth, turns upper teeth crown-up, lines it up with a reference tooth and looks for decay. Drag to move the image, pinch or scroll to zoom.</p>
+            <div class="row">
+              <button class="chip" id="w-fit">Fit to screen</button>
+              <button class="chip" id="w-next">Check next tooth</button>
+            </div>
+            <label class="range" for="w-mid" id="w-midrow"><span>Midline</span><input type="range" id="w-mid" min="-0.2" max="0.2" step="0.005" value="0"></label>
+            <p class="hint" id="w-midnote">Move the midline if the tooth numbers are off by one.</p>
+          </li>
+        </ol>
       </div>
       <div class="xrayctl">
         <ol class="xsteps">
           <li>
-            <h3><span class="num">1</span>Choose an X-ray or tooth photo</h3>
-            <div class="btns">
-              <label class="btn">Take a photo<input type="file" id="x-cam" accept="image/*" capture="environment"></label>
-              <label class="btn alt">Choose an image<input type="file" id="x-pick" accept="image/*"></label>
-            </div>
-            <p class="hint">One molar seen from the side works best: a periapical or bitewing X-ray, or a photo of a tooth cut in half. Or try a simulated X-ray:</p>
-            <div class="thumbs" id="xthumbs"></div>
-          </li>
-          <li>
-            <h3><span class="num">2</span>Line the tooth up with the outline</h3>
+            <h3><span class="num">1</span>Line the tooth up with the outline</h3>
             <p class="hint">Crown at the top, roots down. Drag the image, pinch or scroll to size it, or use the sliders. Several teeth in the picture? Zoom roughly onto the one you want and press Auto-fit to snap to it.</p>
             <div class="row">
               <div class="seg" role="group" aria-label="Reference tooth" id="x-tooth">
@@ -115,7 +174,7 @@
             <p class="hint" id="x-fitnote" aria-live="polite"></p>
           </li>
           <li>
-            <h3><span class="num">3</span>Mark the decay</h3>
+            <h3><span class="num">2</span>Mark the decay</h3>
             <p class="hint">Decay shows as a dark (radiolucent) patch that starts at the tooth surface. Find it automatically, then correct it with the brush.</p>
             <div class="row">
               <button class="chip" id="x-find">Find dark areas</button>
@@ -137,6 +196,22 @@
           </li>
         </ol>
       </div>
+      <div class="panel adjustrow" id="adjustrow">
+        <button class="chip" id="a-open">Adjust image: crop, turn, contrast</button>
+        <span class="hint" id="a-note" aria-live="polite"></span>
+      </div>
+      <details class="panel aibox" id="aibox">
+        <summary>AI second opinion (optional)</summary>
+        <p class="hint">Sends the image on screen to Claude, Anthropic's AI model, which lists what it sees: decay, fillings, crowns, root fillings, implants, bone loss, lesions at the root tips, impacted or missing teeth. It uses your own Anthropic API key and only runs when you press the button. Nothing else on this page leaves your device.</p>
+        <label class="field" for="ai-key"><span>Anthropic API key</span><input type="password" id="ai-key" autocomplete="off" spellcheck="false" placeholder="sk-ant-…"></label>
+        <label class="check"><input type="checkbox" id="ai-remember"><span>Remember the key on this device</span></label>
+        <div class="row">
+          <button class="btn" id="ai-run">Ask Claude about this image</button>
+          <button class="chip" id="ai-stop" hidden>Stop</button>
+        </div>
+        <p class="hint" id="ai-status" aria-live="polite"></p>
+        <div id="ai-out"></div>
+      </details>
       <div class="drawctl">
         <p class="hint" style="margin-top:0">Shade a lesion on the tooth with your finger or mouse. The reading updates as you draw.</p>
         <div class="row">
@@ -161,6 +236,38 @@
     </section>
   </div>
 </main>
+<div class="dropveil" id="dropveil" hidden><p>Drop the image to check it</p></div>
+<dialog class="editor" id="editor" aria-labelledby="ed-title">
+  <form method="dialog" class="edbox">
+    <div class="edhead">
+      <h2 id="ed-title">Adjust image</h2>
+      <button class="ghost" value="cancel" id="ed-cancel">Cancel</button>
+    </div>
+    <div class="edview"><canvas id="ed-canvas"></canvas></div>
+    <p class="hint">Drag on the image to crop it. Then check it again with Done.</p>
+    <div class="row">
+      <button type="button" class="chip" id="ed-left">↺ Turn left</button>
+      <button type="button" class="chip" id="ed-right">↻ Turn right</button>
+      <button type="button" class="chip" id="ed-flip">Mirror</button>
+      <button type="button" class="chip" id="ed-invert" aria-pressed="false">Invert</button>
+      <button type="button" class="chip" id="ed-enhance" aria-pressed="false">Enhance contrast</button>
+      <button type="button" class="chip" id="ed-reset">Reset</button>
+    </div>
+    <div class="row edfoot">
+      <label class="typesel">Check it as
+        <select id="ed-type">
+          <option value="auto">Detect</option>
+          <option value="panoramic">Panoramic (OPG)</option>
+          <option value="bitewing">Bite-wing</option>
+          <option value="periapical">Single tooth X-ray</option>
+          <option value="photo">Photo of a cut tooth</option>
+          <option value="diagram">Diagram photo</option>
+        </select>
+      </label>
+      <button class="btn" value="done" id="ed-done">Done</button>
+    </div>
+  </form>
+</dialog>
 
 <section class="band sect" id="how">
   <div class="wrap">
@@ -266,8 +373,12 @@
 <script src="js/templates.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/analysis.js"></script>
+<script src="js/scan.js"></script>
 <script src="js/app.js"></script>
 <script src="js/xray.js"></script>
+<script src="js/whole.js"></script>
+<script src="js/upload.js"></script>
 <script src="js/app-start.js"></script>
+<script type="module" src="js/ai.js"></script>
 </body>
 </html>

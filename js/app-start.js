@@ -54,4 +54,16 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 applyToggles();
 drawPaper(gBase, K, 4, '#c7cdd3');
 renderProbe(null);
-openSample('dentin-middle');
+// An image shared from another app comes first; otherwise start on the panoramic example, so the page
+// shows what it does before anything is added.
+(async () => {
+  if (await window.CDC.takeShared()) return;
+  try {
+    const resp = await fetch('samples/opg.jpg');
+    if (!resp.ok) throw new Error(resp.status);
+    const c = canvasOf(await toBitmap(await resp.blob()));
+    up.src = c; up.label = 'Example (simulated) · panoramic'; up.type = 'auto';
+    $('#typenote').textContent = 'This is a simulated example. Add your own X-ray above, or tap a tooth to see how it works.';
+    await wvLoad(c, up.label, 'panoramic');
+  } catch (e) { openSample('dentin-middle'); }
+})();
