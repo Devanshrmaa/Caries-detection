@@ -94,6 +94,15 @@
             <h3><span class="num">2</span>Line the tooth up with the outline</h3>
             <p class="hint">Crown at the top, roots down. Drag the image, pinch or scroll to size it, or use the sliders. Several teeth in the picture? Zoom roughly onto the one you want and press Auto-fit to snap to it.</p>
             <div class="row">
+              <div class="seg" role="group" aria-label="Reference tooth" id="x-tooth">
+                <button data-t="auto" aria-pressed="true">Auto</button>
+                <button data-t="molar" aria-pressed="false">Molar</button>
+                <button data-t="premolar" aria-pressed="false">Premolar</button>
+                <button data-t="incisor" aria-pressed="false">Front tooth</button>
+              </div>
+            </div>
+            <p class="hint" id="x-toothnote" aria-live="polite"></p>
+            <div class="row">
               <button class="chip" id="x-fit">Auto-fit</button>
               <button class="chip" id="x-mirror">Mirror</button>
               <button class="chip" id="x-reset">Reset</button>

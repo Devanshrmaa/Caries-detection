@@ -57,42 +57,53 @@ function drawPaper(g, scale, lw, ink) {
 $('#papersvg').innerHTML = PATHS.map(([, d]) => `<path d="${d}" fill="none" stroke="#1d1d1f" stroke-width="4" stroke-linejoin="round"/>`).join('');
 
 // ------------------------------------------------------------ worker (falls back to the page thread)
-let worker = null, workerReady = null;
-const jobs = new Map();
-try {
-  worker = new Worker('js/worker.js');
-  workerReady = new Promise((ok, no) => {
+// A few background threads (one per spare core, at most three): auto-fit tries the three reference
+// teeth at once. Without workers (a page opened from disk, an old browser) everything runs here.
+const pool = [], jobs = new Map();
+let jobId = 0;
+function startWorker() {
+  const wk = { w: new Worker('js/worker.js'), busy: 0 };
+  wk.ready = new Promise((ok, no) => {
     const t = setTimeout(() => no(new Error('worker timeout')), 15000);
-    worker.onmessage = (e) => {
+    wk.w.onmessage = (e) => {
       if (e.data.type === 'ready') { clearTimeout(t); ok(); return; }
       const j = jobs.get(e.data.id); if (j) { jobs.delete(e.data.id); j(e.data); }
     };
-    worker.onerror = (e) => { clearTimeout(t); no(e); for (const [, j] of jobs) j({ res: { ok: false, error: 'crash' } }); jobs.clear(); };
+    wk.w.onerror = (e) => { clearTimeout(t); no(e); const i = pool.indexOf(wk); if (i >= 0) pool.splice(i, 1); for (const [, j] of jobs) j({ res: { ok: false, error: 'crash' }, fit: null }); jobs.clear(); };
   });
-  worker.postMessage({ type: 'init' });
-} catch (e) { worker = null; }
-let jobId = 0;
+  wk.ready.catch(() => { const i = pool.indexOf(wk); if (i >= 0) pool.splice(i, 1); });
+  wk.w.postMessage({ type: 'init' });
+  return wk;
+}
+try {
+  const n = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
+  for (let i = 0; i < n; i++) pool.push(startWorker());
+} catch (e) { pool.length = 0; }
+// run a job on the least busy worker; null if there is none
+async function onWorker(msg, transfer) {
+  const wk = pool.slice().sort((a, b) => a.busy - b.busy)[0];
+  if (!wk) return null;
+  wk.busy++;
+  try {
+    await wk.ready;
+    return await new Promise((ok) => { const id = ++jobId; jobs.set(id, ok); wk.w.postMessage(Object.assign(msg, { id }), transfer); });
+  } catch (e) { return null; } finally { wk.busy--; }
+}
 async function analysePixels(w, h, data) {
-  if (worker) {
-    try {
-      await workerReady;
-      return await new Promise((ok) => { const id = ++jobId; jobs.set(id, ok); worker.postMessage({ type: 'analyse', id, w, h, buf: data.buffer }, [data.buffer]); });
-    } catch (e) { worker = null; }
-  }
+  const out = await onWorker({ type: 'analyse', w, h, buf: data.buffer }, [data.buffer]);
+  if (out) return out;
   await new Promise(r => setTimeout(r, 30));
   const was = tplName; useTemplate('molar');
   try { return runAnalysis(E, w, h, data); } finally { useTemplate(was); }
 }
-
-async function fitPixels(grey, w, h, M0, opts) {
-  if (worker) {
-    try {
-      await workerReady;
-      return await new Promise((ok) => { const id = ++jobId; jobs.set(id, (d) => ok(d.fit || null)); worker.postMessage({ type: 'fit', id, w, h, buf: grey.buffer, M0, tpl: tplName, opts }, [grey.buffer]); });
-    } catch (e) { worker = null; }
-  }
+async function fitPixels(grey, w, h, M0, opts, tpl) {
+  tpl = tpl || tplName;
+  const keep = grey.slice(); // the buffer goes to the worker; keep a copy in case it fails
+  const out = await onWorker({ type: 'fit', w, h, buf: grey.buffer, M0, tpl, opts }, [grey.buffer]);
+  if (out) return out.fit || null;
   await new Promise(r => setTimeout(r, 30));
-  return E.xray.fit(grey, w, h, M0, opts);
+  const was = tplName; useTemplate(tpl);
+  try { return E.xray.fit(keep, w, h, M0, opts); } finally { useTemplate(was); }
 }
 
 // ------------------------------------------------------------ state + rendering
@@ -337,6 +348,7 @@ document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => {
 
 function setMode(m) {
   st.mode = m;
+  useTemplate(m === 'xray' ? (xr.tplUsed || 'molar') : 'molar'); // diagrams and drawing always use the molar
   $('#m-photo').setAttribute('aria-pressed', String(m === 'photo'));
   $('#m-xray').setAttribute('aria-pressed', String(m === 'xray'));
   $('#m-draw').setAttribute('aria-pressed', String(m === 'draw'));

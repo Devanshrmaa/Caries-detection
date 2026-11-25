@@ -815,7 +815,8 @@
     return { blobs: out, wholes };
   }
   // snap to the tooth under a placement the person made by hand: ICP from there on each grey level
-  function refineFit(g, w, h, M0) {
+  function refineFit(g, w, h, M0, FM) {
+    FM = FM || shapeModel(false);
     const { wholes } = toothBlobs(g, w, h);
     let best = null;
     for (const c of wholes) {
@@ -824,22 +825,22 @@
       const det = M0[0] * M0[4] - M0[1] * M0[3], F = det < 0 ? [-1, 0, w - 1, 0, 1, 0, 0, 0, 1] : I3();
       const pts = det < 0 ? { x: b.x.map(x => w - 1 - x), y: b.y, n: b.n } : b, start = mul3(M0, F);
       for (const model of ['similarity', 'affine']) {
-        const Mm = icp(pts, T.silNear, model === 'similarity' ? start : (best && best.F === F ? best.Mm : start), 30, model, 30, 80);
+        const Mm = icp(pts, FM.silNear, model === 'similarity' ? start : (best && best.F === F ? best.Mm : start), 30, model, 30, 80);
         if (!Mm) continue;
         if (model === 'affine') { const [s1, s2] = svd2(Mm[0], Mm[1], Mm[3], Mm[4]); if (s1 / Math.max(s2, 1e-9) > 1.6) continue; }
-        const M = mul3(Mm, F), q = silIoU(c.sil, w, h, M);
-        if (!best || q > best.q) best = { M, Mm, F, q };
+        const M = mul3(Mm, F), q = silIoU(c.sil, w, h, M, 2, FM);
+        if (!best || q > best.q) best = { M, Mm, F, q, sil: c.sil };
       }
     }
-    return best && { M: best.M, q: best.q };
+    return best && { M: best.M, q: best.q, sil: best.sil };
   }
-  // best fit of the reference molar over the most likely blobs
-  function autoFit(g, w, h) {
+  // best fit of the reference tooth over the most likely blobs
+  function autoFit(g, w, h, FM) {
     const { blobs, wholes } = toothBlobs(g, w, h);
     let best = null;
     for (const c of blobs.slice(0, 4).concat(wholes)) {
       if (c.whole && best && best.sel >= 0.85) break;
-      const f = fitBlob(c.sil, w, h, c.whole);
+      const f = fitBlob(c.sil, w, h, c.whole, FM);
       if (f && (!best || f.sel > best.sel)) best = f;
       if (best && best.sel >= 0.92) break;
     }
@@ -847,23 +848,60 @@
   }
   // Entry point for the page. With M0 (the person's own placement, image -> template), snap to the
   // tooth under it first; a snap there is trusted at a lower overlap than a search of the whole image.
-  const FIT_OK = 0.75, FIT_LOCAL = 0.65;
-  function xrayFit(g, w, h, M0) {
-    let fit = M0 ? refineFit(g, w, h, M0) : null;
+  const FIT_OK = 0.75, FIT_LOCAL = 0.65, FIT_EDGE_Q = 0.58, FIT_EDGE_GAP = 5;
+  // opts.crownOnly: fit the crown only (bite-wings); opts.localOnly: never search the whole image
+  // (a tooth picked out of a panoramic image must stay the tooth that was picked).
+  function xrayFit(g, w, h, M0, opts) {
+    opts = opts || {};
+    const FM = shapeModel(!!opts.crownOnly);
+    let fit = M0 ? refineFit(g, w, h, M0, FM) : null;
     if (fit) fit.local = true;
     const ok = (f) => !!f && f.q >= (f.local ? FIT_LOCAL : FIT_OK);
-    if (!ok(fit)) { const g2 = autoFit(g, w, h); if (g2 && (!fit || g2.q > fit.q + 0.05)) fit = g2; }
-    return fit ? { M: fit.M, q: fit.q, ok: ok(fit) } : { M: null, q: 0, ok: false };
+    if (!ok(fit) && !opts.localOnly) { const g2 = autoFit(g, w, h, FM); if (g2 && (!fit || g2.q > fit.q + 0.05)) fit = g2; }
+    if (!fit) return { M: null, q: 0, ok: false, gap: 60 };
+    // Teeth that touch along their sides merge into one blob, which lowers the overlap of a correct
+    // fit; a fit whose outline sits on the tooth's edges is accepted at a lower overlap.
+    const gap = fit.sil ? edgeGap(fit.sil, w, h, fit.M, FM) : 60;
+    return { M: fit.M, q: fit.q, ok: ok(fit) || (fit.q >= FIT_EDGE_Q && gap <= FIT_EDGE_GAP), gap };
   }
   // overlap of a fitted silhouette with the reference molar, ignoring anything more than 20 px
   // outside the outline (neighbouring teeth, bone), sampled on every second pixel
-  function silIoU(sil, w, h, M, step) {
-    const { W, H } = T, near = xrayRefs().near, Mi = inv3(M), st = step || 2;
+  // The shape a fit aims at: the whole reference tooth, or only its crown and neck (bite-wings show
+  // no roots, so a root in the model would pull the fit off).
+  function shapeModel(crownOnly) {
+    const xr = xrayRefs();
+    if (!crownOnly) return T.fullModel || (T.fullModel = { sil: T.sil, silNear: T.silNear, m: T.m, box: xr.box, near: xr.near });
+    if (T.crownModel) return T.crownModel;
+    const { W, H } = T, N = W * H, cut = Math.round(xr.cervY + 0.15 * xr.ch), sil = new Uint8Array(N), box = [W, H, -1, -1];
+    for (let i = 0; i < N; i++) if (T.sil[i] && (i / W | 0) <= cut) {
+      sil[i] = 1; const x = i % W, y = (i / W) | 0;
+      box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], y);
+    }
+    T.crownModel = { sil, silNear: edt(boundaryMask(sil, W, H), W, H, true).near, m: moments(sil, W, H), box, near: dilate(sil, W, H, 41), crownOnly: true };
+    return T.crownModel;
+  }
+  // How far the template's own outline lies from the tooth's edges in the image, in template pixels
+  // (median). The overlap score only looks near the template, so a narrow template sitting inside a
+  // wide tooth can score well; this catches it. Used to choose between reference teeth.
+  function edgeGap(sil, w, h, M, FM) {
+    const tb = FM.bpts || (FM.bpts = pointsOf(boundaryMask(FM.sil, T.W, T.H), T.W, T.H, 600));
+    const dist = edt(boundaryMask(sil, w, h), w, h, false).dist, Mi = inv3(M);
+    const s = Math.sqrt(Math.abs(M[0] * M[4] - M[1] * M[3])), ds = [];
+    for (let k = 0; k < tb.n; k++) {
+      const x = tb.x[k], y = tb.y[k], ww = Mi[6] * x + Mi[7] * y + Mi[8];
+      const u = Math.round((Mi[0] * x + Mi[1] * y + Mi[2]) / ww), v = Math.round((Mi[3] * x + Mi[4] * y + Mi[5]) / ww);
+      ds.push(u >= 0 && v >= 0 && u < w && v < h ? Math.min(60, dist[v * w + u] * s) : 60);
+    }
+    return median(ds);
+  }
+  function silIoU(sil, w, h, M, step, FM) {
+    FM = FM || shapeModel(false);
+    const { W, H } = T, near = FM.near, Mi = inv3(M), st = step || 2;
     let inter = 0, uni = 0;
     for (let y = 0; y < H; y += st) for (let x = 0; x < W; x += st) {
       const i = y * W + x, ww = Mi[6] * x + Mi[7] * y + Mi[8];
       const u = Math.round((Mi[0] * x + Mi[1] * y + Mi[2]) / ww), v = Math.round((Mi[3] * x + Mi[4] * y + Mi[5]) / ww);
-      const a = near[i] && u >= 0 && v >= 0 && u < w && v < h && sil[v * w + u] === 1, b = T.sil[i] === 1;
+      const a = near[i] && u >= 0 && v >= 0 && u < w && v < h && sil[v * w + u] === 1, b = FM.sil[i] === 1;
       if (a && b) inter++;
       if (a || b) uni++;
     }
@@ -874,8 +912,9 @@
   // at the contact points), from upright and tilted guesses spread across it, sized from its height.
   // Every start gets a few quick ICP rounds; only the best few are run to convergence. With several
   // teeth in view, a tooth near the middle of the image wins over an equally good one at the side.
-  function fitBlob(sil, w, h, wide) {
-    const m = moments(sil, w, h), b = pointsOf(boundaryMask(sil, w, h), w, h, wide ? 4000 : 2500), { box } = xrayRefs();
+  function fitBlob(sil, w, h, wide, FM) {
+    FM = FM || shapeModel(false);
+    const m = moments(sil, w, h), b = pointsOf(boundaryMask(sil, w, h), w, h, wide ? 4000 : 2500), box = FM.box;
     if (b.n < 50) return null;
     let x0 = w, x1 = -1, y0 = h, y1 = -1;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (sil[y * w + x]) {
@@ -883,17 +922,19 @@
     }
     const tH = box[3] - box[1] + 1, tW = box[2] - box[0] + 1, bcx = (box[0] + box[2]) / 2, bcy = (box[1] + box[3]) / 2;
     const judge = (M, step) => {
-      const q = silIoU(sil, w, h, M, step), Mi = inv3(M), ww = Mi[6] * bcx + Mi[7] * bcy + Mi[8];
+      const q = silIoU(sil, w, h, M, step, FM), Mi = inv3(M), ww = Mi[6] * bcx + Mi[7] * bcy + Mi[8];
       const ix = (Mi[0] * bcx + Mi[1] * bcy + Mi[2]) / ww, iy = (Mi[3] * bcx + Mi[4] * bcy + Mi[5]) / ww;
       const dn = Math.hypot(ix - w / 2, iy - h / 2) / (0.5 * Math.max(w, h));
-      return { q, sel: q - 0.2 * dn * dn };
+      // The tooth that matters is near the middle (a single-tooth image, or a crop around a tap). Decay
+      // notches a tooth's outline, so a healthy neighbour can fit better: the middle has to win clearly.
+      return { q, sel: q - 1.5 * dn * dn };
     };
     const runs = [];
     for (const mirror of [false, true]) {
       const F = mirror ? [-1, 0, w - 1, 0, 1, 0, 0, 0, 1] : I3();
       const pts = mirror ? { x: b.x.map(x => w - 1 - x), y: b.y, n: b.n } : b;
       const mm = mirror ? Object.assign({}, m, { cx: w - 1 - m.cx, theta: -m.theta }) : m;
-      const inits = [initFromMoments(mm, T.m, false), initFromMoments(mm, T.m, true)];
+      const inits = [initFromMoments(mm, FM.m, false), initFromMoments(mm, FM.m, true)];
       const bx0 = mirror ? w - 1 - x1 : x0, bx1 = mirror ? w - 1 - x0 : x1;
       for (const side of [false, true]) { // tooth upright, or lying on its side
         const span = side ? x1 - x0 + 1 : y1 - y0 + 1, across = (side ? y1 - y0 + 1 : x1 - x0 + 1) * tH / span;
@@ -906,22 +947,22 @@
         }
       }
       for (const M0 of inits) {
-        const Mm = icp(pts, T.silNear, M0, 8, 'similarity', 30, 80);
+        const Mm = icp(pts, FM.silNear, M0, 8, 'similarity', 30, 80);
         runs.push(Object.assign({ Mm, F, pts }, judge(mul3(Mm, F), 4)));
       }
     }
     runs.sort((a, b) => b.sel - a.sel);
     let best = null;
     for (const r of runs.slice(0, 4)) {
-      const Mm = icp(r.pts, T.silNear, r.Mm, 30, 'similarity', 30, 80), M = mul3(Mm, r.F), j = judge(M);
+      const Mm = icp(r.pts, FM.silNear, r.Mm, 30, 'similarity', 30, 80), M = mul3(Mm, r.F), j = judge(M);
       if (!best || j.sel > best.sel) best = Object.assign({ M, Mm, F: r.F, pts: r.pts }, j);
     }
-    const A = icp(best.pts, T.silNear, best.Mm, 40, 'affine', 15, 80);
+    const A = icp(best.pts, FM.silNear, best.Mm, 40, 'affine', 15, 80);
     if (A) {
       const [s1, s2] = svd2(A[0], A[1], A[3], A[4]), M = mul3(A, best.F), j = judge(M);
       if (s1 / Math.max(s2, 1e-9) < 1.6 && j.sel >= best.sel - 0.005) best = Object.assign(best, { M }, j);
     }
-    return { M: best.M, q: best.q, sel: best.sel };
+    return { M: best.M, q: best.q, sel: best.sel, sil };
   }
   function xrayRefs() {
     if (T.xr) return T.xr;
@@ -932,19 +973,22 @@
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (sil[y * W + x]) {
       box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], y);
     }
-    const midX = (ex0 + ex1) / 2, out = new Uint8Array(N);
+    const top = box[1], ch = cervY - top, midX = (ex0 + ex1) / 2, out = new Uint8Array(N);
     for (let i = 0; i < N; i++) out[i] = sil[i] ? 0 : 1;
     const dIn = distTo(out, W, H); // depth below the outer surface, for points inside the tooth
     // the neck of the tooth on each side, where cervical burn-out shows
     const neck = new Uint8Array(N);
-    for (let y = cervY - 50; y <= cervY + 25; y++) for (let x = 0; x < W; x++) {
+    for (let y = Math.round(cervY - 0.21 * ch); y <= Math.round(cervY + 0.1 * ch); y++) for (let x = 0; x < W; x++) {
       const i = y * W + x;
-      if (sil[i] && dIn[i] <= 24) neck[i] = x < midX ? 1 : 2;
+      if (sil[i] && dIn[i] <= 0.1 * ch) neck[i] = x < midX ? 1 : 2;
     }
-    // root tips: the lowest point of the outline on each side
-    const apex = [[0, 0], [0, 0]];
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (sil[y * W + x]) { const a = apex[x < midX ? 0 : 1]; if (y >= a[1]) { a[0] = x; a[1] = y; } }
-    T.xr = { cervY, box, midX, dIn, neck, apex, near: dilate(sil, W, H, 41), core: erode(sil, W, H, 21) };
+    // root tips: given with the template, else the lowest point of the outline on each side
+    let apex = T.apexPts;
+    if (!apex) {
+      apex = [[0, 0], [0, 0]];
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (sil[y * W + x]) { const a = apex[x < midX ? 0 : 1]; if (y >= a[1]) { a[0] = x; a[1] = y; } }
+    }
+    T.xr = { cervY, top, ch, box, midX, crownHW: (ex1 - ex0) / 2, dIn, neck, apex, near: dilate(sil, W, H, 41), core: erode(sil, W, H, 21) };
     return T.xr;
   }
   // Grey levels of the crown in the template frame. Very bright patches (metal fillings, crowns,
@@ -1041,11 +1085,11 @@
   }
   // where a lesion sits on the crown: the occlusal surface, a proximal (side) surface or the neck
   function lesionSite(core) {
-    const { W, S, eff } = T, { cervY, midX } = xrayRefs(), votes = { occlusal: 0, proximal: 0, cervical: 0 };
+    const { W, S, eff } = T, { cervY, midX, top, ch, crownHW } = xrayRefs(), votes = { occlusal: 0, proximal: 0, cervical: 0 };
     let best = 9, bi = -1, side = 0;
     const vote = (i) => {
       const x = i % W, y = (i / W) | 0;
-      const site = y < 100 && x >= 78 && x <= 374 ? 'occlusal' : y >= cervY - 55 ? 'cervical' : 'proximal';
+      const site = y < top + 0.25 * ch && Math.abs(x - midX) <= 0.85 * crownHW ? 'occlusal' : y >= cervY - 0.23 * ch ? 'cervical' : 'proximal';
       votes[site]++; side += x < midX ? -1 : 1;
     };
     for (let i = 0; i < core.length; i++) if (core[i]) {
@@ -1109,7 +1153,7 @@
   }
 
   const api = { P, Z, init, select, analyseImage, analyseDrawing, warpColour, classify, get T() { return T; },
-    xray: { otsu, toothBlobs, fitBlob, autoFit, refineFit, fit: xrayFit, findDark, inspect, lesionSite },
+    xray: { otsu, toothBlobs, fitBlob, autoFit, refineFit, fit: xrayFit, findDark, inspect, lesionSite, refs: () => xrayRefs(), shapeModel },
     _internal: { inkMap, resizeArea, resizeLinear, edt, components, fillOutline, toothCandidates, register, warp, fitHomography, fitAffine, fitSimilarity } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CariesEngine = api;

@@ -7,6 +7,7 @@ const XSAMPLES = [['xray-enamel', 'Enamel'], ['xray-dentin', 'Dentin'], ['xray-p
 const xr = {
   img: null, iw: 0, ih: 0, mask: null, maskC: null, maskG: null, undo: [], label: '',
   p: null, s0: 1, tool: 'move', brush: 9, sens: 6, auto: false, aligned: false, res: null, timer: 0, found: null,
+  tplPick: 'auto', tplUsed: 'molar', crownOnly: false, localOnly: false,
 };
 function xrM() {
   const { cx, cy, s, rot, asp, k, flip } = xr.p, co = Math.cos(rot), si = Math.sin(rot), f = flip ? -1 : 1;
@@ -182,11 +183,49 @@ async function xrAutoFit(local) {
   const sx = w / xr.iw, sy = h / xr.ih, img = xr.img;
   let M0 = null;
   if (local) { const A = xrM(); M0 = [A[0] / sx, A[1] / sy, A[2], A[3] / sx, A[4] / sy, A[5], 0, 0, 1]; }
-  const fit = await fitPixels(grey, w, h, M0);
-  if (!fit) return { q: 0, ok: false };
-  if (fit.ok && xr.img === img) { const M = fit.M; xrSetFromM([M[0] * sx, M[1] * sy, M[2], M[3] * sx, M[4] * sy, M[5]]); }
-  return fit;
+  const opts = { crownOnly: !!xr.crownOnly, localOnly: !!xr.localOnly };
+  // "Auto" tries each reference tooth and keeps the one whose outline fits best
+  const names = xr.tplPick === 'auto' ? [tplName].concat(XTEETH.map(t => t[0]).filter(n => n !== tplName)) : [xr.tplPick];
+  // a template whose outline sits well inside or outside the tooth's edges loses points; another
+  // template has to beat the first one clearly to replace it
+  const score = (f) => f.q * (1 - Math.min(0.5, (f.gap || 0) / 40));
+  // all reference teeth are fitted at once, each on its own background thread when there are several
+  const fits = await Promise.all(names.map(name => fitPixels(grey.slice(), w, h, M0, opts, name)));
+  let best = null;
+  names.forEach((name, i) => {
+    const fit = fits[i];
+    // the first template stands unless another one fits really well
+    const strong = fit && fit.M && fit.ok && fit.q >= 0.85 && (fit.gap || 0) <= 6;
+    if (fit && fit.M && (!best || (strong && score(fit) > score(best.fit) + 0.03))) best = { fit, name };
+  });
+  if (!best) return { q: 0, ok: false };
+  useTemplate(best.name);
+  xr.tplUsed = best.name; xrSyncTooth();
+  if (best.fit.ok && xr.img === img) { const M = best.fit.M; xrSetFromM([M[0] * sx, M[1] * sy, M[2], M[3] * sx, M[4] * sy, M[5]]); }
+  return best.fit;
 }
+// which reference tooth is in use; "Auto" shows what it picked
+const XTEETH = [['molar', 'Molar'], ['premolar', 'Premolar'], ['incisor', 'Front tooth']];
+function xrSyncTooth() {
+  for (const b of document.querySelectorAll('#x-tooth button')) b.setAttribute('aria-pressed', String(b.dataset.t === xr.tplPick));
+  const used = XTEETH.find(t => t[0] === (xr.tplUsed || tplName));
+  $('#x-toothnote').textContent = xr.tplPick === 'auto' && used ? `Auto picked: ${used[1].toLowerCase()}.` : '';
+}
+async function xrPickTooth(t) {
+  xr.tplPick = t; xrSyncTooth();
+  if (t !== 'auto') { useTemplate(t); xr.tplUsed = t; }
+  if (st.mode !== 'xray') return;
+  xrDrawOutline();
+  if (!xr.img) return;
+  setBusy(true, 'Lining up the tooth…');
+  try {
+    const fit = await xrAutoFit(true);
+    xrFitNote(fit);
+    if (fit.ok && !xr.mask.some(v => v)) xr.auto = true;
+    xrChanged(fit.ok || xr.aligned);
+  } finally { setBusy(false); }
+}
+$('#x-tooth').onclick = (e) => { const b = e.target.closest('button[data-t]'); if (b) xrPickTooth(b.dataset.t); };
 function xrFitNote({ q, ok }) {
   $('#x-fitnote').textContent = !ok ? 'Could not line up a tooth. Drag and zoom so the crown sits roughly inside the outline, then press Auto-fit again.'
     : q >= 0.85 ? `Lined up a tooth (outline overlap ${Math.round(q * 100)}%). Wrong tooth? Drag and zoom onto the one you want, then press Auto-fit again.`
