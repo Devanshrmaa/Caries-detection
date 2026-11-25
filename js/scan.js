@@ -241,15 +241,17 @@
   // crowns. Fitting the table of crown widths to those dips gives the size of the teeth in pixels, so
   // the numbering works with or without wisdom teeth. Returns { mid, k (px per mm) } for one jaw.
   // lcFrac: crown height as a share of the image height (panoramic about 0.08, bite-wing about 0.26)
-  function arch(g, w, h, occ, upper, lcFrac) {
-    const Lc = h * (lcFrac || 0.08), cols = [], vals = [];
+  // band: the part of the crown sampled, as shares of the crown height from the biting edge
+  // dark: keep only dips in the darker part of the profile (a gap is darker than a pulp horn)
+  function arch(g, w, h, occ, upper, lcFrac, band, dark) {
+    const Lc = h * (lcFrac || 0.08), cols = [], vals = [], [t0, t1] = band || [0.12, 0.54];
     const x0 = Math.max(0, Math.floor(occ.archL)), x1 = Math.min(w - 1, Math.ceil(occ.archR)), step = Math.max(1, Math.round(w / 800));
     for (let x = x0; x <= x1; x += step) {
       const b = biteAt(occ, x).y, sgn = upper ? -1 : 1;
       let s = 0, n = 0;
       // the biting half of the crown: lower down, the dark pulp inside each crown would show as a dip.
       // (The notch between a molar's cusps can show as a dip here; the width checks deal with that.)
-      for (let t = 0.12; t <= 0.6; t += 0.06) { const y = Math.round(b + sgn * t * Lc); if (y >= 0 && y < h) { s += g[y * w + x]; n++; } }
+      for (let j = 0; j <= 7; j++) { const t = t0 + (t1 - t0) * j / 7, y = Math.round(b + sgn * t * Lc); if (y >= 0 && y < h) { s += g[y * w + x]; n++; } }
       cols.push(x); vals.push(n ? s / n : 0);
     }
     // smooth a little, then find dips that stand out from the crowns on both sides
@@ -260,6 +262,7 @@
       if (sm[i] > sm[i - 1] || sm[i] > sm[i + 1]) continue;
       let la = sm[i], ra = sm[i];
       for (let k = 1; k <= win; k++) { if (i - k >= 0) la = Math.max(la, sm[i - k]); if (i + k < sm.length) ra = Math.max(ra, sm[i + k]); }
+      if (dark != null && sm[i] > percentile(sm, dark)) continue;
       if (Math.min(la, ra) - sm[i] >= prom && (!dips.length || cols[i] - dips[dips.length - 1] > h * 0.02)) dips.push(cols[i]);
     }
     const centre = (occ.archL + occ.archR) / 2, half = Math.max((occ.archR - occ.archL) / 2, w * 0.2);
@@ -272,8 +275,8 @@
   // Fit the table of crown widths to the dips of each jaw: the tooth size k (pixels per mm) that puts
   // the predicted gaps between teeth closest to the dips found. Each jaw on its own: their teeth differ
   // in width (lower incisors are much narrower).
-  function arches(g, w, h, occ, lcFrac) {
-    const J = { upper: arch(g, w, h, occ, true, lcFrac), lower: arch(g, w, h, occ, false, lcFrac) };
+  function arches(g, w, h, occ, lcFrac, band, dark) {
+    const J = { upper: arch(g, w, h, occ, true, lcFrac, band, dark), lower: arch(g, w, h, occ, false, lcFrac, band, dark) };
     for (const jaw of ['upper', 'lower']) {
       const A = J[jaw], cum = [];
       WIDTHS[jaw].reduce((a, c) => (cum.push(a + c), a + c), 0);

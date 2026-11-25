@@ -208,12 +208,22 @@ async function xrAutoFit(local) {
   // a template whose outline sits well inside or outside the tooth's edges loses points; another
   // template has to beat the first one clearly to replace it
   const score = (f) => f.q * (1 - Math.min(0.5, (f.gap || 0) / 40));
-  // all reference teeth are fitted at once, each on its own background thread when there are several
-  const fits = await Promise.all(names.map(name => fitPixels(grey.slice(), w, h, M0, opts, name)));
+  // all reference teeth are fitted at once, each on its own background thread when there are several;
+  // with a measured crown (a tooth cut from a whole X-ray) each starts from its own placement on it
+  const startFor = (name) => {
+    if (!local || !xr.box) return M0;
+    const P = placeOnBox(name, xr.box, xr.iw, xr.ih), keep = xr.p;
+    xr.p = Object.assign({ asp: 1, k: 0, flip: false }, P);
+    const A = xrM(); xr.p = keep;
+    return [A[0] / sx, A[1] / sy, A[2], A[3] / sx, A[4] / sy, A[5], 0, 0, 1];
+  };
+  const fits = await Promise.all(names.map(name => fitPixels(grey.slice(), w, h, startFor(name), opts, name)));
   let best = null;
   names.forEach((name, i) => {
     const fit = fits[i];
-    // the first template stands unless another one fits really well
+    // snapped crowns: the higher contrast across the outline wins; otherwise the first template stands
+    // unless another one fits really well
+    if (fit && fit.snap) { if (!best || fit.q > best.fit.q + 0.02) best = { fit, name }; return; }
     const strong = fit && fit.M && fit.ok && fit.q >= 0.85 && (fit.gap || 0) <= 6;
     if (fit && fit.M && (!best || (strong && score(fit) > score(best.fit) + 0.03))) best = { fit, name };
   });
@@ -279,6 +289,7 @@ async function xrOpen(src, label, opts) {
     const mc = document.createElement('canvas'); mc.width = iw; mc.height = ih;
     Object.assign(xr, { img: c, iw, ih, mask: new Uint8Array(iw * ih), maskC: mc, maskG: mc.getContext('2d'), undo: [], label, auto: true, res: null,
       ctx: opts.ctx || null, crownOnly: !!opts.crownOnly, localOnly: !!opts.localOnly, tplOnly: opts.tplOnly || null, ai: null, metal: opts.metal || null,
+      box: opts.box ? { cx: opts.box.cx * s, w: opts.box.w * s, top: opts.box.top * s } : null,
       kind: opts.kind || (opts.ctx ? 'xray' : null) });
     if (opts.tpl) { xr.tplPick = opts.tpl; useTemplate(opts.tpl); xr.tplUsed = opts.tpl; }
     else if (opts.ctx) xr.tplPick = 'auto';

@@ -40,7 +40,9 @@ async function wvLoad(src, label, type) {
     await new Promise(r => setTimeout(r, 20));
     const S = DentalScan, occ = S.biteLine(grey, gw, gh, type);
     const pano = type === 'panoramic', Lc = pano ? 0.08 : 0.26;
-    const arches = occ ? S.arches(grey, gw, gh, occ, Lc) : null;
+    // bite-wing crowns are big: sample below the cusps (a molar's cusps would look like a gap) and above
+    // the pulp horns
+    const arches = occ ? S.arches(grey, gw, gh, occ, Lc, pano ? null : [0.18, 0.38], pano ? null : 30) : null;
     const lo = S.percentile(grey, 2), hi = S.percentile(grey, 98);
     Object.assign(wv, { img: c, w, h, type, label, grey, gw, gh, gs, occ, arches,
       met: occ ? S.metal(grey, gw, gh, occ, type) : { items: [] },
@@ -239,18 +241,32 @@ function wvGaps(jaw, gx, expect) {
   if (expect && (wdt < 0.7 * expect || wdt > 1.6 * expect)) return null;
   return { cx: (left + right) / 2, w: wdt, index: A.dips.filter(d => d < gx).length };
 }
+// a tooth at the edge of a bite-wing: one gap, and the image edge on the other side
+function wvEdgeGap(jaw, gx) {
+  const A = wv.arches && wv.arches[jaw];
+  if (!A || !A.dips.length) return null;
+  const left = A.dips.filter(d => d < gx).pop(), right = A.dips.find(d => d > gx);
+  if (left == null && right != null) return { cx: right / 2, w: right, index: 0 };
+  if (right == null && left != null) return { cx: (left + wv.gw) / 2, w: wv.gw - left, index: A.dips.length };
+  return null;
+}
 function wvTap(ix, iy) {
   const gx = ix * wv.gs, gy = iy * wv.gs, S = DentalScan, pano = wv.type === 'panoramic';
   const occ = wv.occ || { fit: { p0: wv.gh / 2, p1: 0, p2: 0, mid: wv.gw / 2, half: wv.gw / 2 }, x0: 0, sx: 1, path: [wv.gh / 2] };
   const info = S.toothAt(occ, gx, gy, wv.type, pano ? wvArches() : null), jaw = info.upper ? 'upper' : 'lower';
   // tooth kind and crown width (scan pixels)
-  let kind = info.kind, crownW = info.crownW;
-  if (!pano) crownW = wv.gh * 0.42; // a bite-wing molar crown is roughly this wide
-  const gaps = wvGaps(jaw, gx, crownW);
+  let kind = info.kind, crownW = info.crownW, gaps;
+  if (pano) gaps = wvGaps(jaw, gx, crownW);
+  else {
+    // a bite-wing shows premolars and molars: the gaps either side give the width, the width the kind
+    gaps = wvGaps(jaw, gx, null) || wvEdgeGap(jaw, gx);
+    if (gaps && (gaps.w < 0.15 * wv.gh || gaps.w > 0.65 * wv.gh)) gaps = null;
+    crownW = gaps ? gaps.w : wv.gh * 0.35;
+    kind = crownW < 0.3 * wv.gh ? 'premolar' : 'molar';
+  }
   let cx = gx;
   if (gaps) { cx = gaps.cx; crownW = gaps.w; }
-  if (!pano) kind = null; // a bite-wing shows premolars and molars: let the fit choose
-  const g = tplGeom(kind || 'molar'), L = crownW * g.len / g.cw;
+  const g = tplGeom(kind), L = crownW * g.len / g.cw;
   const b = S.biteAt(occ, cx), th = Math.atan(b.slope || 0);
   // the tooth's long axis is square to the bite line; the middle of the tooth is half a tooth away
   const dir = info.upper ? -1 : 1, nx = -Math.sin(th) * dir, ny = Math.cos(th) * dir;
@@ -268,7 +284,8 @@ function wvTap(ix, iy) {
   // where the reference tooth starts: its middle on the crop's middle, its length one tooth length;
   // then measured on the crop itself (the gaps either side of the crown, and the crown's biting edge)
   let place = { cx: g.cx, cy: g.my, s: g.len / (Li * k), rot: 0 };
-  place = measureCrown(out, place, kind || 'molar') || place;
+  const box = measureCrown(out, place, kind);
+  if (box) place = placeOnBox(kind, box, out.width, out.height);
   let key, title;
   if (pano) { key = String(info.fdi); title = `Tooth ${info.fdi} · ${KINDNAME[kind]} (estimated)`; }
   else {
@@ -279,7 +296,7 @@ function wvTap(ix, iy) {
   const ctx = { key, fdi: info.fdi || null, upper: info.upper, kind, x: ix, y: iy, type: wv.type };
   xrOpen(out, `${title} · from the ${pano ? 'panoramic X-ray' : 'bite-wing'}`, {
     // the crown is what a whole X-ray shows clearly (roots sit in bone, neighbours touch): fit it alone
-    ctx, place, tpl: kind || undefined, tplOnly: pano ? null : ['molar', 'premolar'], crownOnly: true, localOnly: true, metal: mc,
+    ctx, place, box, tpl: kind, tplOnly: pano ? null : ['molar', 'premolar'], crownOnly: true, localOnly: true, metal: mc,
   });
 }
 // the metal mask from the whole-image scan as a canvas (opaque where there is metal)
@@ -331,8 +348,20 @@ function measureCrown(cv, place, kind) {
     if (v > best) { best = v; ym = y; }
   }
   if (best < 0.1 * rng) ym = yTop0;
-  const ns = (2 * R.crownHW) / width; // template px per crop px, so the crown is as wide as measured
-  return { cx: R.midX - (cxm - W2 / 2) * ns, cy: topMid - (ym - H2 / 2) * ns, s: ns, rot: 0 };
+  return { cx: cxm, w: width, top: ym }; // crop pixels
+}
+// a placement that puts a reference tooth's crown on a measured crown box (crop pixels)
+function placeOnBox(kind, box, W2, H2) {
+  const was = tplName; useTemplate(kind);
+  const R = E.xray.refs();
+  let tsum = 0, tn = 0;
+  for (let x = Math.round(R.midX - 0.3 * R.crownHW); x <= Math.round(R.midX + 0.3 * R.crownHW); x++) {
+    for (let y = 0; y < T.H; y++) if (T.sil[y * T.W + x]) { tsum += y; tn++; break; }
+  }
+  const topMid = tn ? tsum / tn : R.box[1];
+  useTemplate(was);
+  const ns = (2 * R.crownHW) / box.w; // template px per crop px, so the crown is as wide as measured
+  return { cx: R.midX - (box.cx - W2 / 2) * ns, cy: topMid - (box.top - H2 / 2) * ns, s: ns, rot: 0 };
 }
 const ordinal = (n) => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
 
@@ -353,7 +382,7 @@ function wvRecord(ctx, r) {
   if (!ctx) return;
   const b = bandOf(r);
   const snap = { img: xr.img, iw: xr.iw, ih: xr.ih, p: Object.assign({}, xr.p), s0: xr.s0, mask: xr.mask, maskC: xr.maskC, maskG: xr.maskG,
-    label: xr.label, tplUsed: xr.tplUsed, tplPick: xr.tplPick, crownOnly: xr.crownOnly, localOnly: xr.localOnly, tplOnly: xr.tplOnly, aligned: xr.aligned, auto: xr.auto, ctx, metal: xr.metal };
+    label: xr.label, tplUsed: xr.tplUsed, tplPick: xr.tplPick, crownOnly: xr.crownOnly, localOnly: xr.localOnly, tplOnly: xr.tplOnly, aligned: xr.aligned, auto: xr.auto, ctx, metal: xr.metal, box: xr.box };
   wv.teeth.set(ctx.key, Object.assign({}, ctx, { pred: r.ok ? r.pred : null, code: b ? b.code : '', depth: r.depth, snap }));
 }
 function wvReopen(key) {
